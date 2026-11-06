@@ -1,4 +1,5 @@
 source blobulation.tcl
+source [file join [file dirname [info script]] blob_exports.tcl]
 
 if {[llength [info commands winfo]] && [winfo exists .blob]} {
 	wm deiconify $::blobulator::blobs
@@ -138,6 +139,15 @@ proc ::blobulator::GUI {} {
 	grid [button $::blobulator::blobs.hdefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::hDefault }] -padx 0 -pady 1 -row 7 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
 	grid [button $::blobulator::blobs.ldefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::lminDefault }] -padx 0 -pady 1 -row 9 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
 	grid [button $::blobulator::blobs.clear -text "Clear representations" -width $::blobulator::buttonWidth -command {::blobulator::blobClear $::blobulator::MolID}] -row 15 -column 0 -columnspan 3
+	frame $::blobulator::blobs.exports
+	pack [button $::blobulator::blobs.exports.pdf -text "Export image (PDF)" \
+		-command {::blobulator::exportFromGUI pdf}] -side left -padx 6 -pady 6
+	pack [button $::blobulator::blobs.exports.csv -text "Export blob data (CSV)" \
+		-command {::blobulator::exportFromGUI csv}] -side left -padx 6 -pady 6
+	grid $::blobulator::blobs.exports -row 16 -column 0 -columnspan 3
+	set ::blobulator::exportStatus "PDF: current VMD scene. CSV: selected molecule's blob data."
+	grid [label $::blobulator::blobs.exportStatus -textvariable ::blobulator::exportStatus \
+		-wraplength 600] -row 17 -column 0 -columnspan 3 -pady 2
 	bind $::blobulator::blobs.dmnu2 <<ComboboxSelected>> {hydropathyScaleDropDownMenu }
 	# Bind each new window's widgets, including when the GUI is reopened.
 	# blobulationSlider ignores edits until Blobulate has been invoked.

@@ -8,6 +8,9 @@ namespace eval ::blobulator:: {
 	variable framesOn 0
 	variable framesTotal 1
 	variable sortedChains {}
+	# Keep provenance for the assignments, independently of editable GUI fields.
+	variable blobulationParameters
+	array set blobulationParameters {}
 	
 
 } 
@@ -103,6 +106,9 @@ proc ::blobulator::blobulate {MolID lMin H select dictInput} {
 	if {$chainBlobs != -1} {
 	::blobulator::blobUserAssign $chainBlobs $MolID $::blobulator::sortedChains
 	::blobulator::blobUser2Assign $chainBlobIndex $MolID $::blobulator::sortedChains
+	set ::blobulator::blobulationParameters([molinfo $MolID get id]) [dict create \
+		selection $select hydropathy_scale $dictInput hydropathy_cutoff $H \
+		minimum_blob_length $lMin]
 
 	
 

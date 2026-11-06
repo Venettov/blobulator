@@ -142,6 +142,7 @@ To obtain this plugin, download the following files from the VMD_scripts folder 
 blobulation.tcl
 Blob_GUI.tcl
 normalized_hydropathyscales.tcl
+blob_exports.tcl
 ```
 
 ## Quickstart:
@@ -170,6 +171,40 @@ normalized_hydropathyscales.tcl
     * For 'Hydrophobicity', this value updates depending on the Hydropathy Scale. 
     * To automatically assign the default value when switching scales, click the 'Auto-Update Threshold' checkbox. 
 
+### Exporting results
+
+After clicking **Blobulate**, the GUI provides two export controls:
+
+* **Export image (PDF)** saves a landscape PDF of the current VMD scene using the built-in `TachyonInternal` renderer. The PDF includes the selected molecule ID, its current frame (0-based), the applied hydropathy scale and thresholds, and the actual smoothing values of its surviving Blobulator representations. It includes **all visible molecules**, just like VMD's scene renderer. Hide any other molecules before exporting if you want an image of only one protein. The PDF embeds a rendered RGB image and selectable caption text; the molecular image is not vector artwork. No Python, Ghostscript or external image converter is required.
+* **Export blob data (CSV)** saves one row per protein residue in the selection used for the last successful blobulation of the selected molecule. It reads the current frame's stored VMD assignments and records the applied parameters, independently of unfinished edits in the controls. It does not re-run blobulation or change coordinates. Unknown/noncanonical protein residues with no assignment are labeled `unassigned` and have an empty `Blob_ID`.
+
+Both controls open a save dialog. Cancelling leaves files unchanged; failed exports preserve existing output files and report an error. Clearing the representations requires clicking **Blobulate** again before exporting. When loading this version into a session that already contains blobs from an older version, click **Blobulate** once to record their parameter provenance.
+
+The VMD CSV columns are:
+
+| Columns | Meaning |
+| --- | --- |
+| `Molecule_ID`, `Molecule_Name`, `Frame` | Source molecule and its current 0-based frame |
+| `Selection` | Atom selection used in the last successful blobulation |
+| `Segment`, `Chain`, `Residue_Index`, `Residue_ID`, `Insertion_Code`, `Residue_Name` | VMD residue identifiers; `Residue_Index` is VMD's 0-based internal residue index, while `Residue_ID` preserves the structure's numbering |
+| `Blob_Type`, `Blob_ID` | `h`, `s`, `p`, or `unassigned`, and the stored numeric VMD `user2` ID. These IDs can repeat between chains and differ from the webtool's blob names. |
+| `Hydropathy_Scale`, `Hydropathy_Cutoff`, `Minimum_Blob_Length` | Applied blobulation parameters |
+| `Trajectory_Smoothing` | Actual frames-per-side settings on the tracked representations. Multiple values separated by `;` indicate manually mixed settings. |
+
+The file uses UTF-8, CSV quoting and CRLF line endings. Trajectory smoothing affects the PDF's displayed geometry and the CSV's smoothing metadata, but leaves blob assignments unchanged. This temporal averaging is separate from the sequence hydropathy smoothing used by the blobulation algorithm.
+
+These exports extend the VMD GUI beyond the original trajectory-smoothing task. They provide a molecular scene and its VMD annotations. They do not reproduce the webtool's sequence plots or its full set of physicochemical/disorder prediction columns. For the webtool-compatible CSV, use the Python package or CLI described above.
+The webtool downloads are described in Section 3.1 and Figure 2E of the [Blobulator article](https://doi.org/10.1021/acs.jcim.5c01585).
+
+The export procedures can also be called from VMD's Tk console after blobulating through the GUI:
+
+```tcl
+::blobulator::exportBlobCSV "/path/to/blob_data.csv"
+::blobulator::exportScenePDF "/path/to/blob_scene.pdf"
+```
+
+The console procedures refuse to replace an existing file unless a second argument of `1` explicitly enables overwriting.
+
 ### How to access blob representations: 
 
 The blobulation algorithm will apply all blob types to the VMD user and user2 values.
@@ -193,3 +228,13 @@ vmd -dispdev text -eofexit -e tests/trajectory_smoothing.test
 ```
 
 The tests generate a disposable five-frame peptide trajectory and check smoothing, coordinate preservation, all representation builders, parameter changes, clearing, molecule selection, input validation, and reopening the plugin. The test process exits with a nonzero status on failure. A graphical VMD session is also needed to check the controls and playback visually.
+
+### Testing exports
+
+From `VMD_scripts`, run:
+
+```sh
+vmd -dispdev text -e tests/blob_exports.test
+```
+
+The export suite checks applied-parameter provenance, selections, multiple chains, insertion codes, unassigned residues, CSV quoting and UTF-8, current-frame/molecule targeting, mixed smoothing, overwrite protection, cancellation, reopening, native PDF rendering, renderer restoration, and coordinate/view preservation. It prints `BLOB_EXPORT_TEST_RESULT` and exits nonzero if any check fails. Run without `-eofexit` so VMD does not exit while the renderer processes events.
