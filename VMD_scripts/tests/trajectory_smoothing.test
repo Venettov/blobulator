@@ -1,0 +1,257 @@
+# Run with: vmd -dispdev text -eofexit -e tests/trajectory_smoothing.test
+# These integration tests require VMD and use a generated, disposable trajectory.
+
+package require tcltest 2
+namespace import ::tcltest::test
+
+set scriptDir [file dirname [file dirname [file normalize [info script]]]]
+set originalDir [pwd]
+cd $scriptDir
+source Blob_GUI.tcl
+
+# Capture GUI validation dialogs in text mode; VMD commands remain real.
+set ::blobulator::blobs .blob
+proc tk_messageBox {args} {
+    set ::dialogMessage [lindex $args [expr {[lsearch -exact $args -message] + 1}]]
+    return ok
+}
+
+# A small peptide with five coordinate frames is sufficient to exercise VMD's
+# representation lifecycle without downloading protein or trajectory fixtures.
+proc newTestMolecule {} {
+    set pdb ""
+    set serial 0
+    set resid 0
+    foreach resname {LEU LEU LEU LEU GLU GLU SER SER LEU LEU LEU LEU} {
+        incr resid
+        foreach {name element dx dy} {N N 0.0 0.0 CA C 1.4 0.0 C C 2.8 0.0 O O 3.0 1.2} {
+            incr serial
+            set x [expr {3.8 * ($resid - 1) + $dx}]
+            append pdb [format "ATOM  %5d %-4s %3s A%4d    %8.3f%8.3f%8.3f%6.2f%6.2f          %2s\n" \
+                $serial $name $resname $resid $x $dy 0.0 1.0 0.0 $element]
+        }
+    }
+    append pdb "END\n"
+    set fixture [::tcltest::makeFile $pdb smoothing_fixture.pdb]
+    set molid [mol new $fixture type pdb waitfor all]
+    ::tcltest::removeFile smoothing_fixture.pdb
+    set sel [atomselect $molid all]
+    for {set frame 1} {$frame < 5} {incr frame} {
+        animate dup frame 0 $molid
+        $sel frame $frame
+        $sel moveby [list 0 $frame 0]
+    }
+    $sel delete
+    return $molid
+}
+
+proc setupBlobs {} {
+    set ::blobulator::trajectorySmoothing 0
+    set ::blobulator::smoothingWindow 0
+    set ::blobulator::MolID [newTestMolecule]
+    set ::blobulator::Lmin 2
+    set ::blobulator::H 0.4
+    set ::blobulator::select protein
+    set ::blobulator::graphRepOptions "Blob Type"
+    set ::blobulator::isFirstTimeBlobulating 1
+    ::blobulator::blobulate $::blobulator::MolID 2 0.4 protein "Kyte-Doolittle"
+    ::blobulator::graphRepUserSelect protein
+}
+
+proc smoothingValues {molid} {
+    set values {}
+    for {set rep 0} {$rep < [molinfo $molid get numreps]} {incr rep} {
+        lappend values [mol smoothrep $molid $rep]
+    }
+    return [lsort -unique $values]
+}
+
+proc trajectoryCoordinates {molid} {
+    set coords {}
+    set sel [atomselect $molid all]
+    for {set frame 0} {$frame < [molinfo $molid get numframes]} {incr frame} {
+        $sel frame $frame
+        lappend coords [$sel get {x y z}]
+    }
+    $sel delete
+    return $coords
+}
+
+proc cleanupMolecules {} {
+    foreach molid [molinfo list] {
+        mol delete $molid
+    }
+    array unset ::blobulator::blobRepNames
+    set ::blobulator::isFirstTimeBlobulating 0
+}
+
+test smoothing-1.1 {new blob representations start unsmoothed} -setup {
+    setupBlobs
+} -body {
+    list [expr {[molinfo $::blobulator::MolID get numreps] > 1}] \
+        [smoothingValues $::blobulator::MolID]
+} -cleanup {
+    cleanupMolecules
+} -result {1 0}
+
+test smoothing-1.2 {apply smooths every blob and preserves all coordinate frames} -setup {
+    setupBlobs
+} -body {
+    set before [trajectoryCoordinates $::blobulator::MolID]
+    set ::blobulator::smoothingWindow 3
+    set applied [::blobulator::applyTrajectorySmoothing]
+    list $applied [smoothingValues $::blobulator::MolID] \
+        [expr {$before eq [trajectoryCoordinates $::blobulator::MolID]}]
+} -cleanup {
+    cleanupMolecules
+} -result {1 3 1}
+
+test smoothing-1.3 {zero disables smoothing for every blob} -setup {
+    setupBlobs
+} -body {
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    set ::blobulator::smoothingWindow 0
+    ::blobulator::applyTrajectorySmoothing
+    smoothingValues $::blobulator::MolID
+} -cleanup {
+    cleanupMolecules
+} -result 0
+
+test smoothing-2.1 {all four builders restore the last applied value} -setup {
+    setupBlobs
+} -body {
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    # Unsubmitted text must not break representation rebuilding.
+    set ::blobulator::smoothingWindow unfinished
+    set values {}
+    foreach builder {
+        {::blobulator::graphRepUser}
+        {::blobulator::graphRepUser2}
+        {::blobulator::graphRepUserSelect protein}
+        {::blobulator::graphRepUser2Select protein}
+    } {
+        {*}$builder
+        lappend values [smoothingValues $::blobulator::MolID]
+    }
+    set ::blobulator::H 0.5
+    set ::blobulator::graphRepOptions "Blob ID"
+    ::blobulator::blobulationSlider
+    lappend values [smoothingValues $::blobulator::MolID]
+    set values
+} -cleanup {
+    cleanupMolecules
+} -result {3 3 3 3 3}
+
+test smoothing-2.2 {clear forgets old reps and preserves the smoothing preference} -setup {
+    setupBlobs
+} -body {
+    set molid $::blobulator::MolID
+    set ::blobulator::smoothingWindow 2
+    ::blobulator::applyTrajectorySmoothing
+    ::blobulator::blobClear $molid
+    # Slider callbacks must not recreate representations immediately after clear.
+    ::blobulator::blobulationSlider
+    set cleared [list [molinfo $molid get numreps] \
+        [info exists ::blobulator::blobRepNames($molid)]]
+    ::blobulator::graphRepUserSelect protein
+    list $cleared [smoothingValues $molid]
+} -cleanup {
+    cleanupMolecules
+} -result {{0 0} 2}
+
+test smoothing-3.1 {unrelated reps and a different top molecule stay unchanged} -setup {
+    setupBlobs
+} -body {
+    set molid $::blobulator::MolID
+    set other [newTestMolecule]
+    mol addrep $molid
+    set extra [expr {[molinfo $molid get numreps] - 1}]
+    mol smoothrep $molid $extra 1
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    list [mol smoothrep $molid 0] [mol smoothrep $molid $extra] \
+        [smoothingValues $other]
+} -cleanup {
+    cleanupMolecules
+} -result {3 1 0}
+
+test smoothing-3.2 {deleting a blob rep does not confuse shifted representation indices} -setup {
+    setupBlobs
+} -body {
+    set molid $::blobulator::MolID
+    set originalCount [molinfo $molid get numreps]
+    mol delrep 0 $molid
+    mol addrep $molid
+    set extra [expr {[molinfo $molid get numreps] - 1}]
+    mol smoothrep $molid $extra 1
+    set changed [::blobulator::smoothBlobRepresentations $molid 3]
+    list [expr {$changed == $originalCount - 1}] \
+        [mol smoothrep $molid 0] [mol smoothrep $molid $extra]
+} -cleanup {
+    cleanupMolecules
+} -result {1 3 1}
+
+test smoothing-3.3 {top resolves to the currently selected molecule} -setup {
+    setupBlobs
+} -body {
+    set ::blobulator::MolID top
+    set ::blobulator::smoothingWindow 2
+    ::blobulator::applyTrajectorySmoothing
+    smoothingValues top
+} -cleanup {
+    cleanupMolecules
+} -result 2
+
+test smoothing-4.1 {invalid entries leave the applied value intact and report an error} -setup {
+    setupBlobs
+} -body {
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    set results {}
+    foreach invalid {{} -1 1.5 abc 2147483648 4294967296} {
+        set ::dialogMessage ""
+        set ::blobulator::smoothingWindow $invalid
+        lappend results [list [::blobulator::applyTrajectorySmoothing] \
+            $::blobulator::trajectorySmoothing \
+            [smoothingValues $::blobulator::MolID] \
+            [expr {$::dialogMessage ne ""}]]
+    }
+    lsort -unique $results
+} -cleanup {
+    cleanupMolecules
+} -result {{0 3 3 1}}
+
+test smoothing-4.2 {a deleted molecule reports an error without changing the preference} -setup {
+    setupBlobs
+} -body {
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    mol delete $::blobulator::MolID
+    set ::blobulator::smoothingWindow 2
+    set ::dialogMessage ""
+    list [::blobulator::applyTrajectorySmoothing] $::blobulator::trajectorySmoothing \
+        [expr {$::dialogMessage ne ""}]
+} -cleanup {
+    cleanupMolecules
+} -result {0 3 1}
+
+test smoothing-4.3 {a preference can be applied before blob representations exist} -setup {
+    set ::blobulator::trajectorySmoothing 0
+    set ::blobulator::MolID [newTestMolecule]
+} -body {
+    set ::blobulator::smoothingWindow 2
+    ::blobulator::applyTrajectorySmoothing
+    set original [smoothingValues $::blobulator::MolID]
+    ::blobulator::blobulate $::blobulator::MolID 2 0.4 protein "Kyte-Doolittle"
+    ::blobulator::graphRepUserSelect protein
+    list $original [smoothingValues $::blobulator::MolID]
+} -cleanup {
+    cleanupMolecules
+} -result {0 2}
+
+set failed $::tcltest::numTests(Failed)
+::tcltest::cleanupTests
+cd $originalDir
+exit [expr {$failed > 0}]

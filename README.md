@@ -159,6 +159,10 @@ normalized_hydropathyscales.tcl
 * Select how you color your blobs; blob representations apply to every frame in a loaded trajectory. 
     * Blob Color - Colors by blob type: h-blobs are blue, p-blobs are orange, and s-blobs are green.
     * Blob ID - Colors h-blobs by blob ID, p-blobs are orange, s-blobs are green, and h-blobs are a color from green to blue.
+* To smooth trajectory playback, enter a nonnegative integer in **Trajectory smoothing** and click **Apply to all blobs** or press Return in the field. The value is the number of frames on each side of the current frame used for averaging; `0` turns smoothing off.
+    * The setting applies to Blobulator representations in the selected **Mol ID**. Representations added separately and other molecules are left unchanged.
+    * The last applied setting is restored when changing blob thresholds, selections, or coloring, and when creating blobs again after clearing representations. An edited value takes effect when applied.
+    * Smoothing changes the display only; it does not modify stored coordinates or analysis results. VMD does not account for periodic wrapping during smoothing, so wrapped trajectories may need to be unwrapped first.
 * To remove all representations, click the 'Clear representations' button.
 * Clicking the 'Default' buttons will return the threshold buttons to their default positions.
     * For 'Length', the default will always be set to 4.
@@ -178,3 +182,13 @@ When coloring by Blob ID, h-blobs will have different colors depending on the us
 ### Known Limitations:
 
 VMD blobulator can not run its blobulation algorithm on proteins that contain non-standard amino acids.
+
+### Testing trajectory smoothing:
+
+From `VMD_scripts`, run the integration tests in VMD text mode:
+
+```sh
+vmd -dispdev text -eofexit -e tests/trajectory_smoothing.test
+```
+
+The tests generate a disposable five-frame peptide trajectory and check smoothing, coordinate preservation, all representation builders, parameter changes, clearing, molecule selection, and input validation. A graphical VMD session is also needed to check the controls and playback visually.

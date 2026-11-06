@@ -1,6 +1,6 @@
 source blobulation.tcl
 
-if [winfo exists .blob] {
+if {[llength [info commands winfo]] && [winfo exists .blob]} {
 	wm deiconify $::blobulator::blobs
 	return
 }
@@ -53,6 +53,13 @@ namespace eval ::blobulator {
 	variable isFirstTimeBlobulating 0
 	variable checkForUpdate
 	variable checkForSelect 
+
+	# Keep the editable field separate from the last successfully applied value.
+	variable smoothingWindow 0
+	variable trajectorySmoothing 0
+	# Stable representation names, indexed by the numeric molecule ID.
+	variable blobRepNames
+	array set blobRepNames {}
 
 
 
@@ -112,15 +119,97 @@ proc ::blobulator::GUI {} {
 	grid [ttk::combobox $::blobulator::blobs.dmnu -textvariable ::blobulator::graphRepOptions -width $::blobulator::dropDownMenuWidth \
 	-values [list $::blobulator::blobColorType1 $::blobulator::blobColorType2] -state readonly ] -pady 6 -row 11 -column 1 -columnspan 1 -sticky w
 	
+	# Trajectory smoothing applies to all representations created by Blobulator.
+	grid [label $::blobulator::blobs.smoothingLabel -text "Trajectory smoothing:"] -row 12 -column 0 -pady 2
+	grid [spinbox $::blobulator::blobs.smoothing -from 0 -to 100 -increment 1 \
+		-width $::blobulator::paraWidth -textvariable ::blobulator::smoothingWindow] -row 12 -column 1 -sticky w
+	grid [button $::blobulator::blobs.applySmoothing -text "Apply to all blobs" \
+		-command {::blobulator::applyTrajectorySmoothing}] -row 12 -column 2 -pady 2
+	grid [label $::blobulator::blobs.smoothingHelp \
+		-text "Frames on each side; 0 turns smoothing off."] -row 13 -column 0 -columnspan 3 -pady 2
+	bind $::blobulator::blobs.smoothing <Return> {::blobulator::applyTrajectorySmoothing}
+
 	#Button grids
-	grid [button $::blobulator::blobs.blobulate -text "Blobulate"  -width $::blobulator::buttonWidth -command {blobulation } ] -columnspan 3
+	grid [button $::blobulator::blobs.blobulate -text "Blobulate"  -width $::blobulator::buttonWidth -command {blobulation } ] -row 14 -column 0 -columnspan 3
 	grid [button $::blobulator::blobs.hdefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::hDefault }] -padx 0 -pady 1 -row 7 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
 	grid [button $::blobulator::blobs.ldefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::lminDefault }] -padx 0 -pady 1 -row 9 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
-	grid [button $::blobulator::blobs.clear -text "Clear representations" -width $::blobulator::buttonWidth -command {::blobulator::blobClear $::blobulator::MolID}] -column 0 -columnspan 3
+	grid [button $::blobulator::blobs.clear -text "Clear representations" -width $::blobulator::buttonWidth -command {::blobulator::blobClear $::blobulator::MolID}] -row 15 -column 0 -columnspan 3
 	bind $::blobulator::blobs.dmnu2 <<ComboboxSelected>> {hydropathyScaleDropDownMenu }
 	
 
 
+}
+
+# ::blobulator::smoothBlobRepresentations --
+# Apply VMD display smoothing to the surviving Blobulator representations.
+# Arguments:
+#     molid   Numeric molecule ID or "top".
+#     window  Nonnegative integer: frames on each side of the current frame.
+# Results:
+#     Returns the number of representations updated. Invalid input raises an
+#     error. Stored atom coordinates and unrelated representations are unchanged.
+proc ::blobulator::smoothBlobRepresentations {molid window} {
+    variable blobRepNames
+
+    if {![string is integer -strict $window] || $window < 0 || $window > 2147483647} {
+        return -code error "Smoothing must be a whole number from 0 to 2147483647."
+    }
+    set molid [molinfo $molid get id]
+    set count 0
+    if {[info exists blobRepNames($molid)]} {
+        foreach name $blobRepNames($molid) {
+            # Representation indices change when another representation is deleted.
+            set rep [mol repindex $molid $name]
+            if {$rep >= 0} {
+                mol smoothrep $molid $rep $window
+                incr count
+            }
+        }
+    }
+    return $count
+}
+
+# ::blobulator::applyTrajectorySmoothing --
+# Apply the GUI field to the selected molecule and save it for future redraws.
+# Arguments:
+#     None. Uses MolID and smoothingWindow from the Blobulator namespace.
+# Results:
+#     Returns 1 on success, or shows an error dialog and returns 0. A failed
+#     application leaves the last successfully applied setting in place.
+proc ::blobulator::applyTrajectorySmoothing {} {
+    variable MolID
+    variable smoothingWindow
+    variable trajectorySmoothing
+    variable blobs
+
+    if {[catch {::blobulator::smoothBlobRepresentations $MolID $smoothingWindow} message]} {
+        tk_messageBox -parent $blobs -icon error -type ok \
+            -title "Trajectory smoothing" -message $message
+        return 0
+    }
+    set trajectorySmoothing $smoothingWindow
+    return 1
+}
+
+# ::blobulator::recordBlobRepresentations --
+# Register the representations after a builder has replaced the molecule's reps.
+# Arguments:
+#     None. Uses the GUI's MolID and last applied trajectorySmoothing value.
+# Results:
+#     Records stable representation names and restores smoothing after rebuilding.
+proc ::blobulator::recordBlobRepresentations {} {
+    variable MolID
+    variable trajectorySmoothing
+    variable blobRepNames
+
+    set molid [molinfo $MolID get id]
+    set blobRepNames($molid) {}
+    set count [molinfo $molid get numreps]
+    for {set rep 0} {$rep < $count} {incr rep} {
+        lappend blobRepNames($molid) [mol repname $molid $rep]
+    }
+    ::blobulator::smoothBlobRepresentations $molid $trajectorySmoothing
+    return
 }
 
 # 
@@ -343,6 +432,7 @@ proc ::blobulator::graphRepUser {} {
 	mol addrep $::blobulator::MolID 
 	mol modselect $count $::blobulator::MolID "user 1"
 	incr count
+	::blobulator::recordBlobRepresentations
 return 
 }
 
@@ -407,6 +497,7 @@ proc ::blobulator::graphRepUserSelect {select} {
 	mol addrep $::blobulator::MolID 
 	mol modselect $count $::blobulator::MolID "user 1 and $select"
 	incr count
+	::blobulator::recordBlobRepresentations
 return 
 }
 #
@@ -462,6 +553,7 @@ proc ::blobulator::graphRepUser2 {} {
 	mol modselect $count $::blobulator::MolID "user 1"
 	incr count
 	colorScale
+	::blobulator::recordBlobRepresentations
 return
 }
 
@@ -525,6 +617,7 @@ proc ::blobulator::graphRepUser2Select {select} {
 	mol modselect $count $::blobulator::MolID "user 1 and $select"
 	incr count
 	colorScale
+	::blobulator::recordBlobRepresentations
 return
 }
 
@@ -537,12 +630,13 @@ return
 #	Global Arguments:
 #	isFirstTimeBlobulating(Integer): A number that swtiches to 1 when the blobulation proc has been called and 0 when blobulation hasnn't been called
 proc ::blobulator::blobClear {MolID} {
-	global isFirst
-	set isFirstTimeBlobulating 0
-	set range [molinfo $::blobulator::MolID get numreps]
+	set molid [molinfo $MolID get id]
+	set ::blobulator::isFirstTimeBlobulating 0
+	set range [molinfo $molid get numreps]
 		for {set i 0} {$i < $range} {incr i} {
-			mol delrep 0 $::blobulator::MolID
+			mol delrep 0 $molid
 		} 
+	unset -nocomplain ::blobulator::blobRepNames($molid)
 return 
 	}
 	
@@ -604,4 +698,7 @@ return
 }
 
 
-::blobulator::GUI
+# Text-mode VMD can load the procedures without opening a Tk window.
+if {[llength [info commands winfo]]} {
+    ::blobulator::GUI
+}
