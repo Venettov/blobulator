@@ -1,0 +1,272 @@
+# Run with: vmd -dispdev text -e tests/blob_video.test
+# One command prevents VMD from reading later tests while rendering events.
+namespace eval :: {
+package require tcltest 2
+namespace import ::tcltest::test
+::tcltest::configure -verbose {start pass error}
+set scriptDir [file dirname [file dirname [file normalize [info script]]]]
+set originalDir [pwd]
+cd $scriptDir
+source Blob_GUI.tcl
+source tests/export_test_helpers.tcl
+set exportDir [::tcltest::makeDirectory blob_video_test_output]
+::tcltest::testConstraint ffmpeg [expr {[::blobulator::findVideoFFmpeg] ne ""}]
+
+proc videoFixture {} {
+    set m [exportFixture {A} {} 0 5]
+    display resize 160 120
+    return $m
+}
+proc videoSnapshot {} {
+    set state [dict create]
+    foreach m [molinfo list] {
+        set frames {}
+        set s [atomselect $m all]
+        for {set f 0} {$f < [molinfo $m get numframes]} {incr f} {
+            $s frame $f
+            lappend frames [$s get {x y z user user2}]
+        }
+        $s delete
+        dict set state $m [list [molinfo $m get {frame active drawn center_matrix rotate_matrix scale_matrix global_matrix}] $frames]
+    }
+    return $state
+}
+proc videoDecoded {path} {
+    set encoder [::blobulator::findVideoFFmpeg]
+    return [exec $encoder -hide_banner -loglevel error -i $path -progress pipe:1 -f null - 2>@1]
+}
+proc videoCancelAfter {limit done total frame} {
+    if {$done >= $limit} {set ::blobulator::videoCancel 1}
+}
+proc videoCleanup {} {
+    set ::blobulator::videoBusy 0
+    set ::blobulator::videoCancel 0
+    set ::blobulator::videoFollow 0
+    set ::blobulator::videoFPS 24
+    set ::blobulator::videoStride 1
+    exportCleanup
+}
+
+test video-1.1 {missing blobulation provenance cannot export a movie} -body {
+    set ::blobulator::MolID [mol new]
+    set target [file join $::exportDir missing.mp4]
+    list [catch {::blobulator::exportTrajectoryVideo $target}] [file exists $target]
+} -cleanup {videoCleanup} -result {1 0}
+
+test video-1.2 {a single structure requires a trajectory} -setup {
+    exportFixture {A} {} 0 1
+} -body {
+    catch {::blobulator::videoConfiguration {}} message
+    string match {*at least two frames*} $message
+} -cleanup {videoCleanup} -result 1
+
+test video-1.3 {invalid frame ranges, strides, rates and follow settings are rejected} -setup {
+    videoFixture
+} -body {
+    set results {}
+    foreach config {{start -1} {end 5} {start 4 end 2} {start abc} {stride 0} {stride 1.5} {fps 0} {fps 121} {fps 2.5} {follow abc} {unknown 1}} {
+        lappend results [catch {::blobulator::videoConfiguration $config}]
+    }
+    lsort -unique $results
+} -cleanup {videoCleanup} -result 1
+
+test video-1.4 {missing FFmpeg has an actionable error and creates no file} -setup {
+    videoFixture
+} -body {
+    set target [file join $::exportDir missing_encoder.mp4]
+    set result [catch {::blobulator::exportTrajectoryVideo $target {ffmpeg /missing/ffmpeg}} message]
+    list $result [string match {*requires FFmpeg*} $message] [file exists $target]
+} -cleanup {videoCleanup} -result {1 1 0}
+
+test video-1.5 {existing files are protected before scene changes} -constraints ffmpeg -setup {
+    videoFixture
+    set target [file join $::exportDir original.mp4]
+    ::blobulator::writeExportFile $target original 1 0
+    set before [videoSnapshot]
+} -body {
+    list [catch {::blobulator::exportTrajectoryVideo $target}] [exportRead $target] \
+        [expr {$before eq [videoSnapshot]}]
+} -cleanup {videoCleanup} -result {1 original 1}
+
+test video-2.1 {a real MP4 decodes to every frame and preserves scene/data/smoothing} -constraints ffmpeg -setup {
+    set m [videoFixture]
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    set before [videoSnapshot]
+    set previous [render format TachyonInternal]
+} -body {
+    set target [file join $::exportDir complete.mp4]
+    set count [::blobulator::exportTrajectoryVideo $target {fps 5}]
+    set decoded [videoDecoded $target]
+    list $count [regexp {frame=5\r?\n} $decoded] [expr {$before eq [videoSnapshot]}] \
+        [expr {$previous eq [render format TachyonInternal]}] [mol smoothrep $m 0] \
+        [llength [glob -nocomplain -directory $::exportDir .blobulator-*]]
+} -cleanup {videoCleanup} -result {5 1 1 1 3 0}
+
+test video-2.2 {odd display dimensions encode successfully with even padding} -constraints ffmpeg -setup {
+    videoFixture
+    display resize 161 121
+} -body {
+    set target [file join $::exportDir odd.mp4]
+    ::blobulator::exportTrajectoryVideo $target {end 1 fps 8}
+    set info [exec [::blobulator::findVideoFFmpeg] -hide_banner -i $target -f null - 2>@1]
+    string match {*162x122*} $info
+} -cleanup {videoCleanup} -result 1
+
+test video-2.3 {range and stride determine actual movie frame count} -constraints ffmpeg -setup {
+    videoFixture
+} -body {
+    set target [file join $::exportDir stride.mp4]
+    set count [::blobulator::exportTrajectoryVideo $target {start 1 end 4 stride 2 fps 8}]
+    list $count [regexp {frame=2\r?\n} [videoDecoded $target]]
+} -cleanup {videoCleanup} -result {2 1}
+
+test video-2.4 {other active trajectories advance, inactive ones stay fixed, all state is restored} -constraints ffmpeg -setup {
+    set first [videoFixture]
+    set second [exportFixture]
+    set third [videoFixture]
+    molinfo $third set frame 2
+    mol inactive $third
+    set empty [mol new]
+    set ::blobulator::MolID $first
+    set before [videoSnapshot]
+    set ::observed {}
+    proc videoObserve {first second third done total frame} {
+        if {$done} {lappend ::observed [list $frame [molinfo $first get frame] \
+            [molinfo $second get frame] [molinfo $third get frame]]}
+    }
+} -body {
+    ::blobulator::exportTrajectoryVideo [file join $::exportDir scene.mp4] \
+        [dict create progress [list videoObserve $first $second $third]]
+    list $::observed [expr {$before eq [videoSnapshot]}] [expr {[molinfo top get id] == $empty}]
+} -cleanup {videoCleanup} -result {{{0 0 0 2} {1 1 1 2} {2 2 1 2} {3 3 1 2} {4 4 1 2}} 1 1}
+
+test video-2.5 {camera follow keeps the selected center anchored without moving atoms} -constraints ffmpeg -setup {
+    set m [videoFixture]
+    set before [videoSnapshot]
+    set s [atomselect $m protein]
+    lassign [molinfo $m get {center_matrix rotate_matrix scale_matrix global_matrix}] c r scale g
+    set ::anchor [coordtrans [transmult $g $r $scale $c] [measure center $s]]
+    $s delete
+    set ::followErrors {}
+    proc videoCheckFollow {m done total frame} {
+        if {!$done} {return}
+        set s [atomselect $m protein frame $frame]
+        lassign [molinfo $m get {center_matrix rotate_matrix scale_matrix global_matrix}] c r scale g
+        set current [coordtrans [transmult $g $r $scale $c] [measure center $s]]
+        $s delete
+        lappend ::followErrors [expr {[veclength [vecsub $current $::anchor]] < 0.00001}]
+    }
+} -body {
+    ::blobulator::exportTrajectoryVideo [file join $::exportDir follow.mp4] \
+        [dict create follow 1 progress [list videoCheckFollow $m]]
+    list [lsort -unique $::followErrors] [expr {$before eq [videoSnapshot]}]
+} -cleanup {videoCleanup} -result {1 1}
+
+test video-2.6 {cancel preserves an existing movie and restores all state} -constraints ffmpeg -setup {
+    videoFixture
+    set before [videoSnapshot]
+    set target [file join $::exportDir cancel.mp4]
+    ::blobulator::writeExportFile $target original 1 0
+} -body {
+    set count [::blobulator::exportTrajectoryVideo $target [dict create progress {videoCancelAfter 2} follow 1] 1]
+    list $count [exportRead $target] [expr {$before eq [videoSnapshot]}] \
+        $::blobulator::videoBusy [llength [glob -nocomplain -directory $::exportDir .blobulator-*]]
+} -cleanup {videoCleanup} -result {0 original 1 0 0}
+
+test video-2.7 {cancelling before the first frame creates no movie} -constraints ffmpeg -setup {
+    videoFixture
+} -body {
+    set target [file join $::exportDir early_cancel.mp4]
+    list [::blobulator::exportTrajectoryVideo $target {progress {videoCancelAfter 0}}] \
+        [file exists $target] [llength [glob -nocomplain -directory $::exportDir .blobulator-*]]
+} -cleanup {videoCleanup} -result {0 0 0}
+
+test video-2.8 {renderer errors preserve files and restore the scene and renderer} -constraints ffmpeg -setup {
+    videoFixture
+    set before [videoSnapshot]
+    set previous [render format TachyonInternal]
+    set target [file join $::exportDir render_error.mp4]
+    ::blobulator::writeExportFile $target original 1 0
+    rename render realRender
+    proc render {args} {
+        if {[lindex $args 0] eq "TachyonInternal"} {error "Injected render failure"}
+        return [uplevel 1 [linsert $args 0 realRender]]
+    }
+} -body {
+    list [catch {::blobulator::exportTrajectoryVideo $target {} 1}] [exportRead $target] \
+        [expr {$before eq [videoSnapshot]}] [expr {$previous eq [render format TachyonInternal]}]
+} -cleanup {
+    rename render {}; rename realRender render
+    videoCleanup
+} -result {1 original 1 1}
+
+test video-2.9 {a real encoder failure is reported and leaves no partial movie} -constraints ffmpeg -setup {
+    videoFixture
+    set before [videoSnapshot]
+    rename ::blobulator::videoEncoderCommand ::blobulator::realVideoEncoderCommand
+    proc ::blobulator::videoEncoderCommand {filename config} {
+        set command [realVideoEncoderCommand $filename $config]
+        return [linsert $command end-1 -c:v blobulator_nonexistent_encoder]
+    }
+} -body {
+    set target [file join $::exportDir encoder_error.mp4]
+    set result [catch {::blobulator::exportTrajectoryVideo $target} message]
+    list $result [string match {*FFmpeg:*} $message] [file exists $target] \
+        [expr {$before eq [videoSnapshot]}] [llength [glob -nocomplain -directory $::exportDir .blobulator-*]]
+} -cleanup {
+    rename ::blobulator::videoEncoderCommand {}
+    rename ::blobulator::realVideoEncoderCommand ::blobulator::videoEncoderCommand
+    videoCleanup
+} -result {1 1 0 1 0}
+
+test video-2.10 {callback failure cannot leave modified frames or partial files} -constraints ffmpeg -setup {
+    videoFixture
+    set before [videoSnapshot]
+    proc videoBadProgress {done total frame} {if {$done == 2} {error "Callback failed"}}
+} -body {
+    set target [file join $::exportDir callback_error.mp4]
+    list [catch {::blobulator::exportTrajectoryVideo $target {follow 1 progress videoBadProgress}}] \
+        [file exists $target] [expr {$before eq [videoSnapshot]}] $::blobulator::videoBusy
+} -cleanup {videoCleanup} -result {1 0 1 0}
+
+test video-2.11 {a cancelled export can be retried immediately} -constraints ffmpeg -setup {
+    videoFixture
+} -body {
+    set target [file join $::exportDir retry.mp4]
+    set cancelled [::blobulator::exportTrajectoryVideo $target {progress {videoCancelAfter 1}}]
+    list $cancelled [::blobulator::exportTrajectoryVideo $target {end 1}] [file isfile $target]
+} -cleanup {videoCleanup} -result {0 2 1}
+
+test video-2.12 {pinned molecule and applied settings survive unfinished GUI edits} -constraints ffmpeg -setup {
+    set first [videoFixture]
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    set second [videoFixture]
+    set ::blobulator::smoothingWindow unfinished
+    set ::blobulator::H .9
+    set ::blobulator::MolID top
+} -body {
+    set config [::blobulator::videoConfiguration [dict create molid $first]]
+    list [expr {[dict get $config molid] == $first}] \
+        [dict get $config context smoothing] [dict get $config context hydropathy_cutoff]
+} -cleanup {videoCleanup} -result {1 3 .4}
+
+test video-3.1 {reopening the plugin preserves movie preferences} -setup {
+    set ::blobulator::videoFPS 12
+    set ::blobulator::videoStride 2
+    set ::blobulator::videoFollow 1
+} -body {
+    source Blob_GUI.tcl
+    list $::blobulator::videoFPS $::blobulator::videoStride $::blobulator::videoFollow
+} -cleanup {videoCleanup} -result {12 2 1}
+
+set failed $::tcltest::numTests(Failed)
+puts "BLOB_VIDEO_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
+::tcltest::removeDirectory blob_video_test_output
+cd $originalDir
+::tcltest::cleanupTests
+flush stdout
+interp create videoTestExit
+interp eval videoTestExit [list exit [expr {$failed > 0}]]
+}

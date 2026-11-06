@@ -1,5 +1,6 @@
 source blobulation.tcl
 source [file join [file dirname [info script]] blob_exports.tcl]
+source [file join [file dirname [info script]] blob_video.tcl]
 
 if {[llength [info commands winfo]] && [winfo exists .blob]} {
 	wm deiconify $::blobulator::blobs
@@ -144,8 +145,10 @@ proc ::blobulator::GUI {} {
 		-command {::blobulator::exportFromGUI pdf}] -side left -padx 6 -pady 6
 	pack [button $::blobulator::blobs.exports.csv -text "Export blob data (CSV)" \
 		-command {::blobulator::exportFromGUI csv}] -side left -padx 6 -pady 6
+	pack [button $::blobulator::blobs.exports.video -text "Export video (MP4)" \
+		-command {::blobulator::videoOptions}] -side left -padx 6 -pady 6
 	grid $::blobulator::blobs.exports -row 16 -column 0 -columnspan 3
-	set ::blobulator::exportStatus "PDF: current VMD scene. CSV: selected molecule's blob data."
+	set ::blobulator::exportStatus "PDF/MP4: current VMD scene. CSV: selected molecule's blob data."
 	grid [label $::blobulator::blobs.exportStatus -textvariable ::blobulator::exportStatus \
 		-wraplength 600] -row 17 -column 0 -columnspan 3 -pady 2
 	bind $::blobulator::blobs.dmnu2 <<ComboboxSelected>> {hydropathyScaleDropDownMenu }

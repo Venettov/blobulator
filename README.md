@@ -143,6 +143,7 @@ blobulation.tcl
 Blob_GUI.tcl
 normalized_hydropathyscales.tcl
 blob_exports.tcl
+blob_video.tcl
 ```
 
 ## Quickstart:
@@ -173,12 +174,19 @@ blob_exports.tcl
 
 ### Exporting results
 
-After clicking **Blobulate**, the GUI provides two export controls:
+After clicking **Blobulate**, the GUI provides three export controls:
 
 * **Export image (PDF)** saves a landscape PDF of the current VMD scene using the built-in `TachyonInternal` renderer. The PDF includes the selected molecule ID, its current frame (0-based), the applied hydropathy scale and thresholds, and the actual smoothing values of its surviving Blobulator representations. It includes **all visible molecules**, just like VMD's scene renderer. Hide any other molecules before exporting if you want an image of only one protein. The PDF embeds a rendered RGB image and selectable caption text; the molecular image is not vector artwork. No Python, Ghostscript or external image converter is required.
 * **Export blob data (CSV)** saves one row per protein residue in the selection used for the last successful blobulation of the selected molecule. It reads the current frame's stored VMD assignments and records the applied parameters, independently of unfinished edits in the controls. It does not re-run blobulation or change coordinates. Unknown/noncanonical protein residues with no assignment are labeled `unassigned` and have an empty `Blob_ID`.
+* **Export video (MP4)** opens trajectory movie options. Choose the first/last frame (0-based), frame stride and playback FPS, then click **Save MP4...**. The movie uses the current representations, colors, orientation and applied smoothing. The **Follow protein with the camera** option pans the whole scene to follow the applied protein selection without changing coordinates or the relative placement of molecules. It keeps the current composition and zoom; it does not unwrap periodic boundaries or automatically fit an unfolding protein into the view.
 
-Both controls open a save dialog. Cancelling leaves files unchanged; failed exports preserve existing output files and report an error. Clearing the representations requires clicking **Blobulate** again before exporting. When loading this version into a session that already contains blobs from an older version, click **Blobulate** once to record their parameter provenance.
+All controls use save dialogs. Cancelling leaves files unchanged; failed exports preserve existing output files and report an error. Clearing the representations requires clicking **Blobulate** again before exporting. When loading this version into a session that already contains blobs from an older version, click **Blobulate** once to record their parameter provenance.
+
+MP4 export requires a trajectory with at least two loaded frames and an [FFmpeg](https://ffmpeg.org/download.html) executable built with the `libx264` encoder. The plugin searches `PATH`, `~/.local/bin/ffmpeg`, `/opt/homebrew/bin/ffmpeg` and `/usr/local/bin/ffmpeg`. You can browse to another executable in the movie options, or set `BLOBULATOR_FFMPEG` before starting VMD. FFmpeg is needed only for MP4; PDF and CSV remain independent of it. FFmpeg's license and build options belong to the separately installed encoder; no encoder binary is distributed in this repository.
+
+Movies contain the current VMD scene, including all visible molecules. The selected molecule follows the chosen frame range. Other visible active trajectories advance to the same frame index, capped at their last frame; inactive molecules remain fixed. Export temporarily freezes animation activity and restores every molecule's original frame, activity flag and view matrices afterward, including on cancellation or failure. Original playback settings are preserved. Keep the display size fixed while exporting.
+
+The progress bar reports rendered frames and **Cancel** discards the unfinished movie after the current frame finishes rendering. The exporter streams frames to FFmpeg, keeping only one temporary rendered image on disk. The H.264 MP4 uses `yuv420p`, pads odd image dimensions by one pixel as needed, and stores the applied parameters and frame-range settings in its comment metadata. Playback FPS controls presentation speed rather than simulation time. The number of movie frames is `1 + floor((end - start) / stride)` and its duration is that count divided by FPS.
 
 The VMD CSV columns are:
 
@@ -191,7 +199,7 @@ The VMD CSV columns are:
 | `Hydropathy_Scale`, `Hydropathy_Cutoff`, `Minimum_Blob_Length` | Applied blobulation parameters |
 | `Trajectory_Smoothing` | Actual frames-per-side settings on the tracked representations. Multiple values separated by `;` indicate manually mixed settings. |
 
-The file uses UTF-8, CSV quoting and CRLF line endings. Trajectory smoothing affects the PDF's displayed geometry and the CSV's smoothing metadata, but leaves blob assignments unchanged. This temporal averaging is separate from the sequence hydropathy smoothing used by the blobulation algorithm.
+The file uses UTF-8, CSV quoting and CRLF line endings. Trajectory smoothing affects PDF/MP4 geometry and the CSV's smoothing metadata, but leaves blob assignments unchanged. This temporal averaging is separate from the sequence hydropathy smoothing used by the blobulation algorithm.
 
 These exports extend the VMD GUI beyond the original trajectory-smoothing task. They provide a molecular scene and its VMD annotations. They do not reproduce the webtool's sequence plots or its full set of physicochemical/disorder prediction columns. For the webtool-compatible CSV, use the Python package or CLI described above.
 The webtool downloads are described in Section 3.1 and Figure 2E of the [Blobulator article](https://doi.org/10.1021/acs.jcim.5c01585).
@@ -201,9 +209,12 @@ The export procedures can also be called from VMD's Tk console after blobulating
 ```tcl
 ::blobulator::exportBlobCSV "/path/to/blob_data.csv"
 ::blobulator::exportScenePDF "/path/to/blob_scene.pdf"
+# Movie options are optional; end -1 means the last loaded frame.
+::blobulator::exportTrajectoryVideo "/path/to/blob_movie.mp4" \
+    [dict create start 0 end -1 stride 1 fps 24 follow 0]
 ```
 
-The console procedures refuse to replace an existing file unless a second argument of `1` explicitly enables overwriting.
+The PDF/CSV console procedures refuse to replace an existing file unless a second argument of `1` explicitly enables overwriting. For video, overwrite permission is the third argument, after the options dictionary. Video options also accept `ffmpeg` (executable path), `molid` (a numeric molecule ID pinned for the export), and `progress` (a Tcl command prefix receiving completed-frame count, total count and current trajectory frame). Video returns the encoded frame count on success or `0` on cancellation.
 
 ### How to access blob representations: 
 
@@ -238,3 +249,11 @@ vmd -dispdev text -e tests/blob_exports.test
 ```
 
 The export suite checks applied-parameter provenance, selections, multiple chains, insertion codes, unassigned residues, CSV quoting and UTF-8, current-frame/molecule targeting, mixed smoothing, overwrite protection, cancellation, reopening, native PDF rendering, renderer restoration, and coordinate/view preservation. It prints `BLOB_EXPORT_TEST_RESULT` and exits nonzero if any check fails. Run without `-eofexit` so VMD does not exit while the renderer processes events.
+
+### Testing video export
+
+```sh
+vmd -dispdev text -e tests/blob_video.test
+```
+
+The movie suite checks option validation, real MP4 encoding/decoding, stride and odd image sizes, camera following, multiple active/inactive molecules, cancellation/retry, renderer and encoder failures, applied metadata, reopening, and preservation of coordinates, annotations, frames and view state. Encoding checks require FFmpeg and are marked skipped if it is unavailable. The suite prints `BLOB_VIDEO_TEST_RESULT` and exits nonzero on failure. Run without `-eofexit`.

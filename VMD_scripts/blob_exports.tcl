@@ -5,11 +5,12 @@ namespace eval ::blobulator {
 
 # Read the assignments at the selected molecule's current frame. Provenance
 # comes from the last successful blobulation, never from unsubmitted GUI text.
-proc ::blobulator::exportContext {} {
+proc ::blobulator::exportContext {{molid ""}} {
     variable MolID
     variable blobulationParameters
     variable blobRepNames
-    set molid [molinfo $MolID get id]
+    if {$molid eq ""} {set molid $MolID}
+    set molid [molinfo $molid get id]
     if {![info exists blobulationParameters($molid)] ||
         ![info exists blobRepNames($molid)]} {
         error "Blobulate the selected molecule before exporting."
@@ -142,7 +143,7 @@ proc ::blobulator::readExportPPM {filename} {
     lassign $tokens magic width height maximum
     if {$magic ne "P6" || ![string is integer -strict $width] ||
         ![string is integer -strict $height] || $width < 1 || $height < 1 || $maximum ne "255"} {
-        error "PDF export requires an 8-bit RGB PPM image from TachyonInternal."
+        error "Export requires an 8-bit RGB PPM image from TachyonInternal."
     }
     set separator [string index $data $offset]
     if {![string is space -strict $separator]} {error "Missing PPM raster separator."}
