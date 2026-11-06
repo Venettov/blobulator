@@ -54,8 +54,7 @@ proc setupBlobs {} {
     set ::blobulator::select protein
     set ::blobulator::graphRepOptions "Blob Type"
     set ::blobulator::isFirstTimeBlobulating 1
-    ::blobulator::blobulate $::blobulator::MolID 2 0.4 protein "Kyte-Doolittle"
-    ::blobulator::graphRepUserSelect protein
+    blobulation
 }
 
 proc smoothingValues {molid} {
@@ -251,7 +250,89 @@ test smoothing-4.3 {a preference can be applied before blob representations exis
     cleanupMolecules
 } -result {0 2}
 
+test smoothing-5.1 {reopening restores the applied value and keeps redraws working} -setup {
+    setupBlobs
+} -body {
+    set molid $::blobulator::MolID
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    set names $::blobulator::blobRepNames($molid)
+    # Reopening discards an unfinished edit in favor of the applied setting.
+    set ::blobulator::smoothingWindow unfinished
+    source Blob_GUI.tcl
+    set reopened [list $::blobulator::smoothingWindow \
+        $::blobulator::trajectorySmoothing [smoothingValues $molid] \
+        [expr {$names eq $::blobulator::blobRepNames($molid)}]]
+    ::blobulator::blobulationSlider
+    list $reopened [smoothingValues $molid] \
+        [expr {[mol repname $molid 0] ne [lindex $names 0]}]
+} -cleanup {
+    cleanupMolecules
+} -result {{3 3 3 1} 3 1}
+
+test smoothing-5.2 {reopening preserves an explicitly applied zero} -setup {
+    setupBlobs
+} -body {
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    set ::blobulator::smoothingWindow 0
+    ::blobulator::applyTrajectorySmoothing
+    source Blob_GUI.tcl
+    ::blobulator::blobulationSlider
+    list $::blobulator::smoothingWindow $::blobulator::trajectorySmoothing \
+        [smoothingValues $::blobulator::MolID]
+} -cleanup {
+    cleanupMolecules
+} -result {0 0 0}
+
+test smoothing-5.3 {clear and reopen preserve the preference without recreating reps} -setup {
+    setupBlobs
+} -body {
+    set molid $::blobulator::MolID
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    ::blobulator::blobClear $molid
+    source Blob_GUI.tcl
+    ::blobulator::blobulationSlider
+    set cleared [list $::blobulator::smoothingWindow \
+        $::blobulator::trajectorySmoothing [molinfo $molid get numreps] \
+        $::blobulator::isFirstTimeBlobulating]
+    ::blobulator::graphRepUserSelect protein
+    list $cleared [smoothingValues $molid]
+} -cleanup {
+    cleanupMolecules
+} -result {{3 3 0 0} 3}
+
+test smoothing-5.4 {reopening retains the settings shown for existing blobs} -setup {
+    setupBlobs
+} -body {
+    set ::blobulator::H 0.55
+    set ::blobulator::Lmin 3
+    set ::blobulator::select {protein and resid 1 to 8}
+    set ::blobulator::hydropathyScaleDictionaryList "Eisenberg-Weiss"
+    set ::blobulator::graphRepOptions "Blob ID"
+    set ::blobulator::checkForUpdate 1
+    set ::blobulator::checkForSelect 1
+    set before [list $::blobulator::MolID $::blobulator::H \
+        $::blobulator::Lmin $::blobulator::select \
+        $::blobulator::hydropathyScaleDictionaryList \
+        $::blobulator::graphRepOptions $::blobulator::checkForUpdate \
+        $::blobulator::checkForSelect $::blobulator::isFirstTimeBlobulating]
+    source Blob_GUI.tcl
+    set after [list $::blobulator::MolID $::blobulator::H \
+        $::blobulator::Lmin $::blobulator::select \
+        $::blobulator::hydropathyScaleDictionaryList \
+        $::blobulator::graphRepOptions $::blobulator::checkForUpdate \
+        $::blobulator::checkForSelect $::blobulator::isFirstTimeBlobulating]
+    expr {$before eq $after}
+} -cleanup {
+    cleanupMolecules
+} -result 1
+
 set failed $::tcltest::numTests(Failed)
 ::tcltest::cleanupTests
 cd $originalDir
-exit [expr {$failed > 0}]
+# VMD replaces the usual exit command and ignores its status argument. A fresh
+# Tcl interpreter retains native exit, so test failures reach the calling shell.
+interp create testExit
+interp eval testExit [list exit [expr {$failed > 0}]]

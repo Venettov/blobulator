@@ -35,28 +35,32 @@ namespace eval ::blobulator {
 	variable hydropathyScale1 "Kyte-Doolittle"
 	variable hydropathyScale2 "Eisenberg-Weiss"
 	variable hydropathyScale3 "Moon-Fleming"
-	variable graphRepOptions "Blob ID"
-
-
-	#Switch variables and sets intital values
-	#Sets the initial hydrophobicity scale
-	variable hydropathyScaleDictionaryList "Kyte-Doolittle"
-
-	#Sets the initial atomselection
-	variable select "all"
+	# Initialize user settings once per VMD session. Reopening the window must
+	# keep the settings and callback state associated with the existing blobs.
+	foreach {name default} {
+		graphRepOptions {Blob ID}
+		hydropathyScaleDictionaryList Kyte-Doolittle
+		select all
+		Lmin 4
+		H .40
+		isFirstTimeBlobulating 0
+		checkForUpdate 0
+		checkForSelect 0
+		trajectorySmoothing 0
+	} {
+		variable $name
+		if {![info exists $name]} {
+			set $name $default
+		}
+	}
+	unset name default
 	
 	variable resStart 
 	variable resEnd
-	variable Lmin 4
-	variable H .40
 	variable MolID 
-	variable isFirstTimeBlobulating 0
-	variable checkForUpdate
-	variable checkForSelect 
 
-	# Keep the editable field separate from the last successfully applied value.
-	variable smoothingWindow 0
-	variable trajectorySmoothing 0
+	# Reopening restores the applied value and discards any unsubmitted edit.
+	variable smoothingWindow $trajectorySmoothing
 	# Stable representation names, indexed by the numeric molecule ID.
 	variable blobRepNames
 	array set blobRepNames {}
@@ -135,6 +139,14 @@ proc ::blobulator::GUI {} {
 	grid [button $::blobulator::blobs.ldefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::lminDefault }] -padx 0 -pady 1 -row 9 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
 	grid [button $::blobulator::blobs.clear -text "Clear representations" -width $::blobulator::buttonWidth -command {::blobulator::blobClear $::blobulator::MolID}] -row 15 -column 0 -columnspan 3
 	bind $::blobulator::blobs.dmnu2 <<ComboboxSelected>> {hydropathyScaleDropDownMenu }
+	# Bind each new window's widgets, including when the GUI is reopened.
+	# blobulationSlider ignores edits until Blobulate has been invoked.
+	bind $::blobulator::blobs.s_Length: <ButtonRelease> {::blobulator::blobulationSlider }
+	bind $::blobulator::blobs.s_Hydrophobicity: <ButtonRelease> {::blobulator::blobulationSlider }
+	bind $::blobulator::blobs.dmnu <<ComboboxSelected>> {::blobulator::blobulationSlider }
+	bind $::blobulator::blobs.e_Length: <Return> {::blobulator::blobulationSlider }
+	bind $::blobulator::blobs.e_Hydrophobicity: <Return> {::blobulator::blobulationSlider }
+	bind $::blobulator::blobs.select <Return> {::blobulator::blobulationSlider }
 	
 
 
@@ -257,12 +269,6 @@ proc blobulation {} {
 	# }
 
 	
-	bind $::blobulator::blobs.s_Length: <ButtonRelease> {::blobulator::blobulationSlider } 
-	bind $::blobulator::blobs.s_Hydrophobicity: <ButtonRelease> {::blobulator::blobulationSlider } 
-	bind $::blobulator::blobs.dmnu <<ComboboxSelected>> {::blobulator::blobulationSlider }
-	bind $::blobulator::blobs.e_Length: <Return> {::blobulator::blobulationSlider }
-	bind $::blobulator::blobs.e_Hydrophobicity: <Return> {::blobulator::blobulationSlider }
-	bind $::blobulator::blobs.select <Return> {::blobulator::blobulationSlider }
 return
 }
 
