@@ -25,6 +25,7 @@ run_check() {
 }
 run_check portable BLOB_PORTABLE_TEST_RESULT tclsh "$script_dir/portable_exports.test"
 run_check tk BLOB_TK_SMOKE_RESULT xvfb-run -a tclsh "$script_dir/tk_widgets_smoke.tcl"
+run_check tk_smoothing BLOB_SMOOTHING_TK_RESULT xvfb-run -a tclsh "$script_dir/tk_smoothing_smoke.tcl"
 if [ "$portable_only" -eq 1 ]; then
     printf '%s\n' 'Portable helpers and Tk checked. VMD integration was NOT run.'
     exit 0

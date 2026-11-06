@@ -259,3 +259,13 @@ vmd -dispdev text -e tests/blob_video.test
 ```
 
 The movie suite checks option validation, real MP4 encoding/decoding, stride and odd image sizes, camera following, multiple active/inactive molecules, cancellation/retry, renderer and encoder failures, applied metadata, reopening, and preservation of coordinates, annotations, frames and view state. Encoding checks require FFmpeg and are marked skipped if it is unavailable. The suite prints `BLOB_VIDEO_TEST_RESULT` and exits nonzero on failure. Run without `-eofexit`.
+
+### Testing the controls on Ubuntu
+
+The [Ubuntu verification runner](VMD_scripts/tests/run_ubuntu_checks.sh) runs the portable export helpers and both Tk widget checks before the VMD integration suites. The smoothing check covers the Apply/Return bindings and retained settings/callbacks on reopening; the export check covers the export controls, video-options modal grab and cancellation. To run the smoothing widget check alone:
+
+```sh
+xvfb-run -a tclsh /path/to/blobulator/VMD_scripts/tests/tk_smoothing_smoke.tcl
+```
+
+These widget checks simulate VMD context. See [Ubuntu compatibility](VMD_scripts/UBUNTU.md) for dependencies, tested versions and the pending integration checks inside Linux VMD.

@@ -342,12 +342,13 @@ test smoothing-6.1 {absolute plugin loading and blobulation work outside the scr
     # The algorithm loads its hydropathy tables when invoked, too.
     ::blobulator::blobulationSlider
     list [smoothingValues $::blobulator::MolID] \
+        [expr {[molinfo $::blobulator::MolID get numreps] > 0}] \
         [dict get $::blobulator::blobulationParameters($::blobulator::MolID) hydropathy_scale]
 } -cleanup {
     cd $scriptDir
     ::tcltest::removeDirectory {other working directory}
     cleanupMolecules
-} -result {2 Kyte-Doolittle}
+} -result {2 1 Kyte-Doolittle}
 
 set failed $::tcltest::numTests(Failed)
 puts "BLOB_SMOOTHING_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"

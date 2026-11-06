@@ -29,7 +29,7 @@ Audit date: 6 November 2026. Results are deliberately separated by environment.
 | Environment | Checks | Result |
 | --- | --- | --- |
 | Ubuntu 24.04.5 LTS, ARM64 virtual machine, Tcl/Tk 8.6.14, FFmpeg 6.1.1 | Eight helper tests: real CSV I/O, UTF-8/quoting/CRLF, safe overwrite, PPM parsing, compressed and uncompressed PDF validation with Poppler, H.264 encode/decode through the exporter's real Tcl pipe, executable override precedence | 8 passed, 0 skipped, 0 failed |
-| Same Ubuntu VM, X11 via Xvfb | Construct the actual Blobulation and video-options Tk widgets, take/release a modal grab, cancel, and reopen with saved smoothing | Passed; VMD context is simulated for widget construction |
+| Same Ubuntu VM, X11 via Xvfb | Both widget checks: construct Blobulation/video-options controls, take/release a modal grab, cancel, verify smoothing Apply/Return bindings, and reopen with retained settings/callbacks | Passed on the merged code; VMD context is simulated for widget construction |
 | Same Ubuntu VM, Poppler and FFmpeg/FFprobe | Open the two saved example PDFs; parse both 76-row/16-column CSV files and compare their annotations; fully decode the two exported MP4s and all three MP4s embedded in the presentation | Passed; exported movies each have 100 frames at 8 FPS, H.264/yuv420p |
 | Same Ubuntu VM | Discover FFmpeg with `PATH` unavailable; check the Linux walkthrough launcher's arguments and paths containing spaces; reject a full verification run when Linux VMD is absent | Passed; launcher uses a stub executable for this check |
 | macOS ARM64, VMD 1.9.4a57, Tcl 8.6.12, FFmpeg 9.0 | Full VMD integration: 16 smoothing, 19 PDF/CSV and 18 movie tests, including loading/using the plugin from another directory | 53 passed, 0 skipped, 0 failed |
@@ -46,7 +46,7 @@ sudo apt install tcl tk xvfb xauth poppler-utils
 sh /path/to/blobulator/VMD_scripts/tests/run_ubuntu_checks.sh
 ```
 
-The runner can be invoked from any working directory. Set `BLOBULATOR_VMD_EXECUTABLE` if `vmd` is not on `PATH`, and optionally provide a log directory as its argument. It fails if a suite fails, skips required checks, omits its result marker, times out, or Linux VMD is missing. It does not download or install VMD.
+The runner can be invoked from any working directory. It includes both Tk checks: export/video widgets and smoothing Apply/Return bindings with retained settings/callbacks on reopening. Set `BLOBULATOR_VMD_EXECUTABLE` if `vmd` is not on `PATH`, and optionally provide a log directory as its argument. It fails if a suite fails, skips required checks, omits its result marker, times out, or Linux VMD is missing. It does not download or install VMD.
 
 To check only the portable helpers and Tk widgets, explicitly use:
 
