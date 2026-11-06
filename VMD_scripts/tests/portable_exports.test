@@ -1,0 +1,109 @@
+# Run with system Tcl: tclsh portable_exports.test
+# Real Tcl I/O, PDF generation and FFmpeg; no VMD renderer or molecule simulation.
+package require tcltest 2
+namespace import ::tcltest::test
+::tcltest::configure -verbose {start pass error}
+set pluginDir [file dirname [file dirname [file normalize [info script]]]]
+source [file join $pluginDir blob_exports.tcl]
+source [file join $pluginDir blob_video.tcl]
+set outputDir [::tcltest::makeDirectory {portable export output}]
+set encoder [::blobulator::findVideoFFmpeg]
+::tcltest::testConstraint ffmpeg [expr {$encoder ne ""}]
+::tcltest::testConstraint pdfinfo [expr {[auto_execok pdfinfo] ne ""}]
+set context [dict create molid 0 frame 2 hydropathy_scale Kyte-Doolittle \
+    hydropathy_cutoff .4 minimum_blob_length 4 smoothing 3 selection protein]
+proc portableRead {path} {
+    set channel [open $path rb]
+    set data [read $channel]
+    close $channel
+    return $data
+}
+
+test portable-1.1 {UTF-8 CSV quoting, embedded newline and CRLF survive real file I/O} -body {
+    set row [::blobulator::csvRow [list "protein, \"A\"\n\u03b1" 3]]
+    set path [file join $outputDir {data with spaces.csv}]
+    ::blobulator::writeExportFile $path "$row\r\n" 0 0
+    expr {[portableRead $path] eq [encoding convertto utf-8 "\"protein, \"\"A\"\"\n\u03b1\",\"3\"\r\n"]}
+} -result 1
+
+test portable-1.2 {atomic saves preserve an existing file unless overwrite is enabled} -body {
+    set path [file join $outputDir existing.csv]
+    ::blobulator::writeExportFile $path original 0 0
+    set refused [catch {::blobulator::writeExportFile $path replacement 0 0}]
+    set before [portableRead $path]
+    ::blobulator::writeExportFile $path replacement 0 1
+    list $refused $before [portableRead $path] \
+        [llength [glob -nocomplain -directory $outputDir .blobulator-*]]
+} -result {1 original replacement 0}
+
+test portable-1.3 {P6 parser retains whitespace-valued raster bytes after a CRLF header} -body {
+    set path [file join $outputDir input.ppm]
+    set pixels [binary format H* 200a0d00ff7f]
+    ::blobulator::writeExportFile $path "P6\r\n# comment\r\n2 1\r\n255\r\n$pixels" 1 0
+    lassign [::blobulator::readExportPPM $path] width height result
+    list $width $height [expr {$result eq $pixels}]
+} -result {2 1 1}
+
+test portable-1.4 {truncated PPM output fails explicitly} -body {
+    set path [file join $outputDir truncated.ppm]
+    ::blobulator::writeExportFile $path "P6\n2 1\n255\nabc" 1 0
+    catch {::blobulator::readExportPPM $path}
+} -result 1
+
+test portable-2.1 {Poppler accepts the generated compressed PDF} -constraints pdfinfo -body {
+    set path [file join $outputDir compressed.pdf]
+    set pixels [binary format H* ff000000ff000000ffffff00]
+    ::blobulator::writeExportFile $path [::blobulator::imagePDF 2 2 $pixels $context] 1 0
+    regexp {Pages:\s+1} [exec pdfinfo $path]
+} -result 1
+
+test portable-2.2 {PDF fallback works without the optional Tcl zlib command} -constraints pdfinfo -body {
+    set path [file join $outputDir uncompressed.pdf]
+    if {[llength [info commands zlib]]} {rename zlib portableSavedZlib}
+    set result [catch {
+        ::blobulator::writeExportFile $path \
+            [::blobulator::imagePDF 1 1 [binary format H* 00ff00] $context] 1 0
+        regexp {Pages:\s+1} [exec pdfinfo $path]
+    } message options]
+    if {[llength [info commands portableSavedZlib]]} {rename portableSavedZlib zlib}
+    if {$result} {return -options $options $message}
+    set message
+} -result 1
+
+test portable-3.1 {the real encoder pipeline handles spaces, odd dimensions and H.264 decoding} -constraints ffmpeg -body {
+    set path [file join $outputDir {movie with spaces α.mp4}]
+    set log [file join $outputDir encoder.log]
+    set config [dict create ffmpeg $encoder fps 8 start 0 last 3 stride 1 follow 0 context $context]
+    set command [::blobulator::videoEncoderCommand $path $config]
+    set pipe [open [concat [list |] $command [list 2> $log]] w]
+    fconfigure $pipe -translation binary -encoding binary -buffering none
+    set pixels [string repeat [binary format H* 33aaff] [expr {161 * 121}]]
+    for {set frame 0} {$frame < 4} {incr frame} {
+        puts -nonewline $pipe "P6\n161 121\n255\n$pixels"
+    }
+    close $pipe
+    set decoded [exec $encoder -hide_banner -loglevel error -i $path -progress pipe:1 -f null - 2>@1]
+    set info [exec $encoder -hide_banner -i $path -f null - 2>@1]
+    list [regexp {frame=4\r?\n} $decoded] [string match {*h264*} $info] \
+        [string match {*yuv420p*} $info] [string match {*162x122*} $info]
+} -result {1 1 1 1}
+
+test portable-3.2 {explicit FFmpeg setting and environment override take priority} -body {
+    set saved $::blobulator::videoFFmpeg
+    set hadEnv [info exists ::env(BLOBULATOR_FFMPEG)]
+    if {$hadEnv} {set oldEnv $::env(BLOBULATOR_FFMPEG)}
+    set ::env(BLOBULATOR_FFMPEG) /test/environment/ffmpeg
+    set ::blobulator::videoFFmpeg /test/explicit/ffmpeg
+    set explicit [::blobulator::findVideoFFmpeg]
+    set ::blobulator::videoFFmpeg ""
+    set environment [::blobulator::findVideoFFmpeg]
+    set ::blobulator::videoFFmpeg $saved
+    if {$hadEnv} {set ::env(BLOBULATOR_FFMPEG) $oldEnv} else {unset ::env(BLOBULATOR_FFMPEG)}
+    list $explicit $environment
+} -result {/test/explicit/ffmpeg /test/environment/ffmpeg}
+
+set failed $::tcltest::numTests(Failed)
+puts "BLOB_PORTABLE_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
+::tcltest::removeDirectory {portable export output}
+::tcltest::cleanupTests
+exit [expr {$failed > 0}]

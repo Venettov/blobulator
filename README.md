@@ -154,6 +154,8 @@ blob_video.tcl
 4. Source the plugin `source Blob_GUI.tcl`.
 5. Click the blobulate button to generate the corresponding graphical representation in VMD.
 
+The scripts can also be loaded by absolute path from any working directory, for example `source {/home/yourname/blobulator/VMD_scripts/Blob_GUI.tcl}`. Keep all five Tcl files together. For Ubuntu dependencies, verification commands and the limits of current Linux testing, see [Ubuntu compatibility](VMD_scripts/UBUNTU.md).
+
 ## Optional Settings:
 * Select the residues you wish to blobulate (defaults to "all").
 * Select your desired scale (defaults to "Kyte-Doolittle").
@@ -182,7 +184,7 @@ After clicking **Blobulate**, the GUI provides three export controls:
 
 All controls use save dialogs. Cancelling leaves files unchanged; failed exports preserve existing output files and report an error. Clearing the representations requires clicking **Blobulate** again before exporting. When loading this version into a session that already contains blobs from an older version, click **Blobulate** once to record their parameter provenance.
 
-MP4 export requires a trajectory with at least two loaded frames and an [FFmpeg](https://ffmpeg.org/download.html) executable built with the `libx264` encoder. The plugin searches `PATH`, `~/.local/bin/ffmpeg`, `/opt/homebrew/bin/ffmpeg` and `/usr/local/bin/ffmpeg`. You can browse to another executable in the movie options, or set `BLOBULATOR_FFMPEG` before starting VMD. FFmpeg is needed only for MP4; PDF and CSV remain independent of it. FFmpeg's license and build options belong to the separately installed encoder; no encoder binary is distributed in this repository.
+MP4 export requires a trajectory with at least two loaded frames and an [FFmpeg](https://ffmpeg.org/download.html) executable built with the `libx264` encoder. The plugin searches `PATH`, `~/.local/bin/ffmpeg`, `/opt/homebrew/bin/ffmpeg`, `/usr/local/bin/ffmpeg` and `/usr/bin/ffmpeg`. You can browse to another executable in the movie options, or set `BLOBULATOR_FFMPEG` before starting VMD. FFmpeg is needed only for MP4; PDF and CSV remain independent of it. FFmpeg's license and build options belong to the separately installed encoder; no encoder binary is distributed in this repository.
 
 Movies contain the current VMD scene, including all visible molecules. The selected molecule follows the chosen frame range. Other visible active trajectories advance to the same frame index, capped at their last frame; inactive molecules remain fixed. Export temporarily freezes animation activity and restores every molecule's original frame, activity flag and view matrices afterward, including on cancellation or failure. Original playback settings are preserved. Keep the display size fixed while exporting.
 

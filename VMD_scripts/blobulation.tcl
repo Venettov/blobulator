@@ -3,8 +3,9 @@
 ###Abstract 
 # This file takes a protein sequence and creates user values that are assign to blob type
 # h's are for hydrophobic blobs, s's are for short blobs, and p's are for polar blobs 
-source normalized_hydropathyscales.tcl
+source [file join [file dirname [info script]] normalized_hydropathyscales.tcl]
 namespace eval ::blobulator:: {
+	variable scriptDirectory [file dirname [file normalize [info script]]]
 	variable framesOn 0
 	variable framesTotal 1
 	variable sortedChains {}
@@ -31,7 +32,8 @@ atomselect macro canonAA {resname ALA ARG ASN ASP CYS GLN GLU GLY HIS HID HIE IL
 #	blobulatedSequence (List): A blobulated sequence that is in 1's 2's and 3's
 proc ::blobulator::blobulate {MolID lMin H select dictInput} {
 	# Source is in the proc so the GUI can call both 
-	source normalized_hydropathyscales.tcl
+	variable scriptDirectory
+	source [file join $scriptDirectory normalized_hydropathyscales.tcl]
 	set nocaseMolID [string tolower $MolID]
 	if {$dictInput == "Kyte-Doolittle"} {
 		set usedDictionary $KD_Normalized
@@ -181,7 +183,8 @@ proc ::blobulator::blobulateChain {MolID lMin H Chain usedDictionary} {
 #	blobulated (List): A blobulated sequence that is in 1's 2's and 3's
 proc ::blobulator::blobulateSelection {MolID lMin H select dictInput} {
 	set nocaseMolID [string tolower $MolID]
-	source normalized_hydropathyscales.tcl
+	variable scriptDirectory
+	source [file join $scriptDirectory normalized_hydropathyscales.tcl]
 	if {$dictInput == "Kyte-Doolittle"} {
 		set usedDictionary $KD_Normalized
 	}

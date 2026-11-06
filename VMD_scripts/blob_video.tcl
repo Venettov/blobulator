@@ -16,7 +16,7 @@ proc ::blobulator::findVideoFFmpeg {} {
     if {[info exists ::env(BLOBULATOR_FFMPEG)]} {return $::env(BLOBULATOR_FFMPEG)}
     set command [auto_execok ffmpeg]
     if {[llength $command]} {return [lindex $command 0]}
-    foreach path {~/.local/bin/ffmpeg /opt/homebrew/bin/ffmpeg /usr/local/bin/ffmpeg} {
+    foreach path {~/.local/bin/ffmpeg /opt/homebrew/bin/ffmpeg /usr/local/bin/ffmpeg /usr/bin/ffmpeg} {
         if {[file isfile $path] && [file executable $path]} {return [file normalize $path]}
     }
     return ""

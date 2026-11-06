@@ -1,4 +1,4 @@
-source blobulation.tcl
+source [file join [file dirname [info script]] blobulation.tcl]
 source [file join [file dirname [info script]] blob_exports.tcl]
 source [file join [file dirname [info script]] blob_video.tcl]
 
