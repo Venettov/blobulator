@@ -193,3 +193,22 @@ vmd -dispdev text -eofexit -e tests/trajectory_smoothing.test
 ```
 
 The tests generate a disposable five-frame peptide trajectory and check smoothing, coordinate preservation, all representation builders, parameter changes, clearing, molecule selection, input validation, and reopening the plugin. The test process exits with a nonzero status on failure. A graphical VMD session is also needed to check the controls and playback visually.
+
+### Ubuntu compatibility for the smoothing branch
+
+Runtime dependency: a Linux VMD installation matching the computer architecture, with Tcl 8.5 or later and Tk/ttk. Obtain VMD from its [official download page](https://www.ks.uiuc.edu/Development/Download/download.cgi?PackageName=VMD). Keep `Blob_GUI.tcl`, `blobulation.tcl` and `normalized_hydropathyscales.tcl` together, preserving their capitalization. The GUI and its hydropathy tables now load relative to the installed scripts, so the Tk Console can source the GUI by absolute path from any working directory:
+
+```tcl
+source {/home/yourname/your project/blobulator/VMD_scripts/Blob_GUI.tcl}
+```
+
+Audit on 6 November 2026: the original branch at `711f806` passed all 15 VMD integration tests on macOS. With the relative-path fix and its added regression check, all 16 integration tests passed in macOS VMD 1.9.4a57/Tcl 8.6.12, without skips. The updated branch's actual GUI widgets, Apply/Return bindings and reopening behavior also passed an independent Ubuntu 24.04.5 ARM64 check with Tcl/Tk 8.6.14 and X11 via Xvfb. That widget check simulates macro registration; it does not exercise real VMD molecule or smoothing commands.
+
+To repeat the Ubuntu widget check, install these test-only packages and run the script by its actual location:
+
+```sh
+sudo apt install tcl tk xvfb xauth
+xvfb-run -a tclsh /path/to/blobulator/VMD_scripts/tests/tk_smoothing_smoke.tcl
+```
+
+**Full verification inside Linux VMD is pending.** A Linux VMD build was unavailable during this audit, and the ARM64 helper VM does not establish support for an Intel/AMD VMD binary. On the target Ubuntu workstation, run the integration command above from `VMD_scripts`, then load ubiquitin in graphical VMD and check smoothing 0, 3 and another value, parameter changes and GUI reopening. The original VMD coordinates must remain unchanged. The original project's macOS screen-recording helpers are separate from the plugin runtime.

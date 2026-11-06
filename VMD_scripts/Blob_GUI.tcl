@@ -1,4 +1,4 @@
-source blobulation.tcl
+source [file join [file dirname [info script]] blobulation.tcl]
 
 if {[llength [info commands winfo]] && [winfo exists .blob]} {
 	wm deiconify $::blobulator::blobs

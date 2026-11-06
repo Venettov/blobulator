@@ -7,6 +7,7 @@ namespace import ::tcltest::test
 set scriptDir [file dirname [file dirname [file normalize [info script]]]]
 set originalDir [pwd]
 cd $scriptDir
+set scriptDir [pwd]
 source Blob_GUI.tcl
 
 # Capture GUI validation dialogs in text mode; VMD commands remain real.
@@ -329,7 +330,25 @@ test smoothing-5.4 {reopening retains the settings shown for existing blobs} -se
     cleanupMolecules
 } -result 1
 
+test smoothing-6.1 {absolute loading and blobulation work outside the script directory} -setup {
+    setupBlobs
+    set elsewhere [::tcltest::makeDirectory {other working directory}]
+} -body {
+    cd $elsewhere
+    source [file join $scriptDir Blob_GUI.tcl]
+    set ::blobulator::smoothingWindow 2
+    ::blobulator::applyTrajectorySmoothing
+    ::blobulator::blobulationSlider
+    list [smoothingValues $::blobulator::MolID] \
+        [expr {[molinfo $::blobulator::MolID get numreps] > 0}]
+} -cleanup {
+    cd $scriptDir
+    ::tcltest::removeDirectory {other working directory}
+    cleanupMolecules
+} -result {2 1}
+
 set failed $::tcltest::numTests(Failed)
+puts "BLOB_SMOOTHING_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
 ::tcltest::cleanupTests
 cd $originalDir
 # VMD replaces the usual exit command and ignores its status argument. A fresh
