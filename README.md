@@ -151,6 +151,8 @@ Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `b
 
 The launchers find VMD through `PATH`, common Unix locations and installed macOS VMD application bundles. Set `BLOBULATOR_VMD_EXECUTABLE` to an executable path for a nonstandard installation. Set `BLOBULATOR_INSTALL_MENU=0` before launching to open the GUI without updating the startup file. No application binaries or VMD distribution are included in the repository; `launchers/Blobulator.applescript` is the source for the optional macOS app in the surrounding project.
 
+When Blobulator creates the user startup file, it also loads VMD's standard startup settings and opens **VMD Main**, which contains the Extensions menu. Launching again repairs an earlier Blobulator-only startup file that left VMD Main hidden. Existing custom startup files retain their own window preferences; the Blobulator desktop launcher explicitly shows VMD Main.
+
 ### Manual loading
 
 The Tk Console method remains available: load your protein, then source `Blob_GUI.tcl` by absolute path, for example `source {/home/yourname/blobulator/VMD_scripts/Blob_GUI.tcl}`. The scripts load their helpers relative to their own folder. For Ubuntu dependencies, verification commands and the limits of current Linux testing, see [Ubuntu compatibility](VMD_scripts/UBUNTU.md).
@@ -278,4 +280,4 @@ vmd -dispdev text -e tests/blob_loader.test
 tclsh tests/menu_install.test
 ```
 
-The loading suite covers PDB and PSF/DCD loading, missing coordinates and malformed files, independent molecule targeting, appending frames, preserving existing coordinates/annotations and smoothing, partial-load rollback, and busy guards. The menu tests use disposable startup files and check safe quoting, preservation/backups, idempotence and registration. Neither menu testing nor `--portable-only` modifies your real startup file.
+The loading suite covers PDB and PSF/DCD loading, missing coordinates and malformed files, independent molecule targeting, appending frames, preserving existing coordinates/annotations and smoothing, partial-load rollback, and busy guards. The menu tests use disposable startup files and check safe quoting, preservation/backups, idempotence, registration, loading VMD's default startup and opening VMD Main. They also check repair of earlier Blobulator-only startup files and retention of custom window preferences. Neither menu testing nor `--portable-only` modifies your real startup file.

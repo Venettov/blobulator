@@ -38,9 +38,33 @@ proc ::blobulator::installMenuShortcut {{startup ""}} {
     if {($start < 0) != ($finish < 0) || ($start >= 0 && $finish < $start)} {
         error "The Blobulator startup block is incomplete. The startup file was left unchanged."
     }
+    # A user .vmdrc replaces VMD's system startup rather than supplementing it.
+    # Seed new files, and repair our earlier plugin-only files, with the normal
+    # defaults. Keep that choice on refresh, even after custom settings are added.
+    set defaultsMarker {# Preserve VMD default startup.}
+    set outside $before
+    set previousBlock ""
+    if {$start >= 0} {
+        set last [expr {$finish + [string length $end] - 1}]
+        set previousBlock [string range $before $start $last]
+        set outside [string replace $before $start $last ""]
+    }
+    set preserveDefaults [expr {[string trim $outside] eq "" || [string first $defaultsMarker $previousBlock] >= 0}]
     set plugin [file join $pluginDirectory blobulator_plugin.tcl]
     set command "if {\[file isfile [list $plugin]\]} { [list source $plugin] }"
-    set block [encoding convertto utf-8 "$begin\n$command\n$end"]
+    set block "$begin\n"
+    if {$preserveDefaults} {
+        append block "$defaultsMarker\n" {
+if {[info exists ::env(VMDDIR)] && [file isfile [file join $::env(VMDDIR) .vmdrc]]} {
+    source [file join $::env(VMDDIR) .vmdrc]
+}
+if {[llength [info commands winfo]] && [llength [info commands menu]]} {
+    menu main on
+}
+}
+    }
+    append block "$command\n$end"
+    set block [encoding convertto utf-8 $block]
     if {$start >= 0} {
         set after [string replace $before $start [expr {$finish + [string length $end] - 1}] $block]
     } else {

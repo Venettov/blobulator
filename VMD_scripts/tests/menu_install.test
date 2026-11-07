@@ -59,6 +59,63 @@ test menu-1.7 {registration happens once even when an unknown menu reports statu
 } -cleanup {
     rename winfo {};rename menu {};unset -nocomplain ::blobulator::menuRegistered
 } -result {1 {tk register blobulator_gui ::blobulator::openWindow Analysis/Blobulator}}
+proc menuStartupProbe {startup defaults} {
+    # Execute the generated file in isolation with a fake VMD API. Checking
+    # registration alone misses the regression where VMD Main remains hidden.
+    set child [interp create]
+    set result [catch {
+        $child eval [list set ::env(VMDDIR) $defaults]
+        $child eval {
+            set main off
+            set defaultLoaded 0
+            proc winfo {args} {return 1}
+            proc menu {args} {
+                if {$args eq {main on}} {set ::main on}
+                return 0
+            }
+        }
+        $child eval [list source $startup]
+        $child eval {list $main $defaultLoaded}
+    } message options]
+    interp delete $child
+    if {$result} {return -options $options $message}
+    return $message
+}
+set defaults [file join $output defaults]
+file mkdir $defaults
+set f [open [file join $defaults .vmdrc] w]
+puts $f {set ::defaultLoaded 1; menu main on}
+close $f
+test menu-1.8 {new startup files load VMD defaults and open VMD Main} -body {
+    menuStartupProbe [file join $output fresh.vmdrc] $defaults
+} -result {on 1}
+test menu-1.9 {custom startup files keep their own window preferences} -body {
+    set rc [file join $output custom.vmdrc]
+    set f [open $rc w];puts $f {set ::customSetting preserved};close $f
+    ::blobulator::installMenuShortcut $rc
+    menuStartupProbe $rc $defaults
+} -result {off 0}
+test menu-1.10 {repair earlier plugin-only startup while keeping an exact backup} -body {
+    set rc [file join $output legacy.vmdrc]
+    set f [open $rc w]
+    puts $f "# BEGIN BLOBULATOR MENU\n[list source [file join $pluginDir blobulator_plugin.tcl]]\n# END BLOBULATOR MENU"
+    close $f
+    set before [menuRead $rc]
+    set result [::blobulator::installMenuShortcut $rc]
+    list [menuStartupProbe $rc $defaults] \
+        [expr {[menuRead [dict get $result backup]] eq $before}] \
+        [dict get [::blobulator::installMenuShortcut $rc] status]
+} -result {{on 1} 1 unchanged}
+test menu-1.11 {refresh retains defaults and subsequently added user settings} -body {
+    set rc [file join $output fresh.vmdrc]
+    set f [open $rc a];puts $f {set ::laterSetting preserved};close $f
+    ::blobulator::installMenuShortcut $rc
+    list [menuStartupProbe $rc $defaults] \
+        [expr {[string first {set ::laterSetting preserved} [menuRead $rc]] >= 0}]
+} -result {{on 1} 1}
+test menu-1.12 {VMD Main opens when the installation has no default startup file} -body {
+    menuStartupProbe [file join $output fresh.vmdrc] [file join $output absent]
+} -result {on 0}
 set failed $::tcltest::numTests(Failed)
 puts "BLOB_MENU_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
 ::tcltest::removeDirectory menu_install_output
