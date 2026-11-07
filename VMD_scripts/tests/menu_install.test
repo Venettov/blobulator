@@ -1,0 +1,66 @@
+# Plain Tcl tests use a disposable startup file, never the user's ~/.vmdrc.
+package require tcltest 2
+namespace import ::tcltest::test
+::tcltest::configure -verbose {start pass error}
+set pluginDir [file dirname [file dirname [file normalize [info script]]]]
+source [file join $pluginDir blobulator_plugin.tcl]
+set output [::tcltest::makeDirectory menu_install_output]
+proc menuRead {filename} {set f [open $filename rb];set data [read $f];close $f;return $data}
+test menu-1.1 {registration source remains lazy and headless-safe} -body {
+    list [package provide blobulator_gui] [llength [info commands ::blobulator::GUI]] [::blobulator::registerMenu]
+} -result {1.1 0 0}
+test menu-1.2 {a new startup file receives one correctly quoted source block} -body {
+    set rc [file join $output fresh.vmdrc]
+    set result [::blobulator::installMenuShortcut $rc]
+    set data [menuRead $rc]
+    list [dict get $result status] [dict get $result backup] \
+        [regexp -all {BEGIN BLOBULATOR MENU} $data] [expr {[string first {blobulator_plugin.tcl} $data]>=0}]
+} -result {installed {} 1 1}
+test menu-1.3 {existing settings survive byte-for-byte and receive a backup} -body {
+    set rc [file join $output existing.vmdrc]
+    set f [open $rc wb];puts -nonewline $f "# custom settings\r\ndisplay projection orthographic";close $f
+    set before [menuRead $rc]
+    set result [::blobulator::installMenuShortcut $rc]
+    list [expr {[menuRead [dict get $result backup]] eq $before}] \
+        [expr {[string first $before [menuRead $rc]]==0}]
+} -result {1 1}
+test menu-1.4 {repeat installation is idempotent and creates no extra backup} -body {
+    set rc [file join $output fresh.vmdrc]
+    set before [menuRead $rc]
+    set result [::blobulator::installMenuShortcut $rc]
+    list [dict get $result status] [dict get $result backup] [expr {$before eq [menuRead $rc]}]
+} -result {unchanged {} 1}
+test menu-1.5 {an incomplete managed block leaves startup untouched} -body {
+    set rc [file join $output broken.vmdrc]
+    set f [open $rc wb];puts -nonewline $f {# BEGIN BLOBULATOR MENU};close $f
+    set before [menuRead $rc]
+    list [catch {::blobulator::installMenuShortcut $rc}] [expr {$before eq [menuRead $rc]}]
+} -result {1 1}
+test menu-1.6 {menu source paths containing spaces and Tcl metacharacters are quoted safely} -body {
+    set rc [file join $output quoted.vmdrc]
+    set previous $::blobulator::pluginDirectory
+    set ::blobulator::pluginDirectory [file join $output {path with spaces [brackets]}]
+    ::blobulator::installMenuShortcut $rc
+    set ::blobulator::pluginDirectory $previous
+    # The referenced file is absent, so evaluation must safely do nothing.
+    list [catch {source $rc}] [regexp -all {BEGIN BLOBULATOR MENU} [menuRead $rc]]
+} -result {0 1}
+test menu-1.7 {registration happens once even when an unknown menu reports status zero} -setup {
+    set calls {}
+    proc winfo {args} {return 1}
+    proc menu {args} {
+        if {[lindex $args 0] eq "tk"} {lappend ::calls $args}
+        return 0
+    }
+} -body {
+    ::blobulator::registerMenu
+    ::blobulator::registerMenu
+    list [llength $calls] [lindex $calls 0]
+} -cleanup {
+    rename winfo {};rename menu {};unset -nocomplain ::blobulator::menuRegistered
+} -result {1 {tk register blobulator_gui ::blobulator::openWindow Analysis/Blobulator}}
+set failed $::tcltest::numTests(Failed)
+puts "BLOB_MENU_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
+::tcltest::removeDirectory menu_install_output
+::tcltest::cleanupTests
+exit [expr {$failed>0}]

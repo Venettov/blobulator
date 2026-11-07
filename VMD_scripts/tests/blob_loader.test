@@ -1,0 +1,153 @@
+# VMD integration: run from VMD_scripts with -dispdev text -e tests/blob_loader.test
+namespace eval :: {
+package require tcltest 2
+namespace import ::tcltest::test
+::tcltest::configure -verbose {start pass error}
+source Blob_GUI.tcl
+set ::blobulator::blobs .blob
+set exportDir [::tcltest::makeDirectory blob_loader_test_output]
+source tests/export_test_helpers.tcl
+set fixture [exportFixture {A} {} 0 5]
+set s [atomselect $fixture all]
+set pdb [file join $exportDir {protein structure.pdb}]
+set psf [file join $exportDir {protein structure.psf}]
+set dcd [file join $exportDir {protein trajectory.dcd}]
+$s frame 0
+$s set segname TEST
+$s set type [$s get name]
+$s setbonds [$s getbonds]
+$s writepdb $pdb
+$s writepsf $psf
+animate write dcd $dcd beg 0 end 4 waitfor all sel $s $fixture
+$s delete
+proc loaderCleanup {} {
+    foreach m [molinfo list] {mol delete $m}
+    array unset ::blobulator::blobRepNames
+    array unset ::blobulator::blobulationParameters
+    set ::blobulator::loadBusy 0
+    set ::blobulator::videoBusy 0
+}
+proc loaderData {molid} {
+    set result {}
+    set s [atomselect $molid all]
+    for {set frame 0} {$frame < [molinfo $molid get numframes]} {incr frame} {
+        $s frame $frame
+        lappend result [$s get {x y z user user2}]
+    }
+    $s delete
+    return $result
+}
+loaderCleanup
+
+test load-1.1 {PDB file picker backend loads a named protein with coordinates} -body {
+    set m [::blobulator::loadProteinFiles $pdb]
+    list [molinfo $m get numatoms] [molinfo $m get numframes] [lindex [molinfo $m get name] 0]
+} -cleanup {loaderCleanup} -result {48 1 {protein structure.pdb}}
+test load-1.2 {PSF and DCD load together without an empty initial frame} -body {
+    set m [::blobulator::loadProteinFiles $psf $dcd]
+    list [molinfo $m get numatoms] [molinfo $m get numframes]
+} -cleanup {loaderCleanup} -result {48 5}
+test load-1.3 {PDB plus DCD retains the structure's initial coordinate frame} -body {
+    set m [::blobulator::loadProteinFiles $pdb $dcd]
+    molinfo $m get numframes
+} -cleanup {loaderCleanup} -result 6
+test load-1.4 {a topology without coordinates fails and removes its private molecule} -setup {
+    set existing [::blobulator::loadProteinFiles $pdb]
+    set before [loaderData $existing]
+} -body {
+    set failed [catch {::blobulator::loadProteinFiles $psf} message]
+    list $failed [string match {*no coordinates*} $message] [molinfo list] \
+        [expr {[molinfo top get id] == $existing}] [expr {$before eq [loaderData $existing]}]
+} -cleanup {loaderCleanup} -match glob -result {1 1 * 1 1}
+test load-1.5 {missing files preserve molecule list, selection and busy state} -setup {
+    set ::blobulator::MolID [::blobulator::loadProteinFiles $pdb]
+    set before [molinfo list]
+} -body {
+    list [catch {::blobulator::loadProteinFiles $pdb [file join $exportDir absent.dcd]}] \
+        [expr {$before eq [molinfo list]}] $::blobulator::loadBusy
+} -cleanup {loaderCleanup} -result {1 1 0}
+test load-1.6 {malformed structures do not leave an empty molecule or change top} -setup {
+    set existing [::blobulator::loadProteinFiles $pdb]
+    set bad [::tcltest::makeFile {not a structure} [file join $exportDir bad.pdb]]
+} -body {
+    set before [molinfo list]
+    list [catch {::blobulator::loadProteinFiles $bad}] [expr {$before eq [molinfo list]}] \
+        [expr {[molinfo top get id] == $existing}] $::blobulator::loadBusy
+} -cleanup {loaderCleanup} -result {1 1 1 0}
+test load-2.1 {adding a trajectory preserves existing coordinates and current frame} -setup {
+    set m [::blobulator::loadProteinFiles $psf $dcd]
+    molinfo $m set frame 2
+    set before [loaderData $m]
+} -body {
+    set count [::blobulator::addTrajectoryFile $m $dcd]
+    list $count [molinfo $m get numframes] [molinfo $m get frame] \
+        [expr {$before eq [lrange [loaderData $m] 0 4]}]
+} -cleanup {loaderCleanup} -result {5 10 2 1}
+test load-2.2 {new frames inherit blob assignments and tracked smoothing remains applied} -setup {
+    set ::blobulator::MolID [::blobulator::loadProteinFiles $psf $dcd]
+    set ::blobulator::select protein
+    set ::blobulator::H .4
+    set ::blobulator::Lmin 4
+    set ::blobulator::hydropathyScaleDictionaryList Kyte-Doolittle
+    blobulation
+    set ::blobulator::smoothingWindow 3
+    ::blobulator::applyTrajectorySmoothing
+    set m $::blobulator::MolID
+    set before [loaderData $m]
+    set names $::blobulator::blobRepNames($m)
+} -body {
+    ::blobulator::addTrajectoryFile $m $dcd
+    set sel [atomselect $m protein frame 0]
+    set original [$sel get {user user2}]
+    $sel frame 9
+    set appended [$sel get {user user2}]
+    $sel delete
+    set windows {}
+    foreach name $names {lappend windows [mol smoothrep $m [mol repindex $m $name]]}
+    list [expr {$original eq $appended}] [expr {$names eq $::blobulator::blobRepNames($m)}] \
+        [lsort -unique $windows] [expr {$before eq [lrange [loaderData $m] 0 4]}]
+} -cleanup {loaderCleanup} -result {1 1 3 1}
+test load-2.3 {a partial append failure rolls back only the newly added frames} -setup {
+    set m [::blobulator::loadProteinFiles $psf $dcd]
+    molinfo $m set frame 3
+    set before [loaderData $m]
+    rename mol nativeLoaderMol
+    proc mol {args} {
+        set result [uplevel 1 [linsert $args 0 nativeLoaderMol]]
+        if {[lindex $args 0] eq "addfile"} {error "Simulated read failure after append"}
+        return $result
+    }
+} -body {
+    list [catch {::blobulator::addTrajectoryFile $m $dcd}] [molinfo $m get numframes] \
+        [molinfo $m get frame] [expr {$before eq [loaderData $m]}] $::blobulator::loadBusy
+} -cleanup {
+    if {[llength [info commands nativeLoaderMol]]} {rename mol {}; rename nativeLoaderMol mol}
+    loaderCleanup
+} -result {1 5 3 1 0}
+test load-2.4 {a structure file adding no frames does not alter an existing molecule} -setup {
+    set m [::blobulator::loadProteinFiles $psf $dcd]
+    set before [loaderData $m]
+} -body {
+    list [catch {::blobulator::addTrajectoryFile $m $psf}] [expr {$before eq [loaderData $m]}]
+} -cleanup {loaderCleanup} -result {1 1}
+test load-3.1 {loading is blocked during an export or another load} -body {
+    set ::blobulator::videoBusy 1
+    set first [catch {::blobulator::loadProteinFiles $pdb}]
+    set ::blobulator::videoBusy 0
+    set ::blobulator::loadBusy 1
+    set second [catch {::blobulator::loadProteinFiles $pdb}]
+    list $first $second [llength [molinfo list]]
+} -cleanup {loaderCleanup} -result {1 1 0}
+test load-3.2 {file type detection handles upper-case common extensions} -body {
+    list [::blobulator::loadFileOptions TEST.PSF] [::blobulator::loadFileOptions TEST.DCD] \
+        [::blobulator::loadFileOptions TEST.PDB]
+} -result {{type psf} {type dcd} {type pdb}}
+
+set failed $::tcltest::numTests(Failed)
+puts "BLOB_LOADER_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
+loaderCleanup
+::tcltest::removeDirectory blob_loader_test_output
+::tcltest::cleanupTests
+interp create loaderExit
+interp eval loaderExit [list exit [expr {$failed>0}]]
+}

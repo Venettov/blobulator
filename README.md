@@ -137,24 +137,23 @@ This plugin allows users to blobulate and view blobs on a protein structure in V
 
 ## Installation guide:
 
-To obtain this plugin, download the following files from the VMD_scripts folder into a single directory:
-``` 
-blobulation.tcl
-Blob_GUI.tcl
-normalized_hydropathyscales.tcl
-blob_exports.tcl
-blob_video.tcl
-```
+Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `blobulation.tcl`, `normalized_hydropathyscales.tcl`, `blob_exports.tcl`, `blob_video.tcl` and `blob_loader.tcl`. The menu/launcher also uses `blobulator_plugin.tcl`, `pkgIndex.tcl` and `start_blobulator.tcl`.
 
 ## Quickstart:
-1. Load a protein into VMD.
-2. Access the Tk console via the Extensions dropdown menu `Extensions > Tk Console`.
-3. In the Tk console, change directory to the directory where you downloaded the above scripts
-`cd /path/to/blobulator/scripts`.
-4. Source the plugin `source Blob_GUI.tcl`.
-5. Click the blobulate button to generate the corresponding graphical representation in VMD.
 
-The scripts can also be loaded by absolute path from any working directory, for example `source {/home/yourname/blobulator/VMD_scripts/Blob_GUI.tcl}`. Keep all five Tcl files together. For Ubuntu dependencies, verification commands and the limits of current Linux testing, see [Ubuntu compatibility](VMD_scripts/UBUNTU.md).
+1. On macOS, double-click **Open_Blobulator.command** in the repository. The surrounding mini-project also supplies **Blobulator.app**, which opens VMD without a Terminal window. On Ubuntu, run `Open_Blobulator.sh` once from the file manager's Run option or from the operating-system terminal.
+2. Blobulator opens in a new graphical VMD session. The first launch adds a managed entry to your user `~/.vmdrc`, so future sessions can open it through **VMD Main > Extensions > Analysis > Blobulator**. Existing startup settings are preserved and backed up before a change. Repeat launches do not duplicate the entry. If the project moves, launch it again to refresh its path.
+3. Click **Load protein...**, browse to a PDB or PSF structure, optionally choose a matching trajectory/coordinate file, and click **Load protein**. A PSF requires coordinates, for example `ubiquitin.psf` with `pulling.dcd`. The selected molecule and protein selection update automatically.
+4. Alternatively, click **Load ubiquitin demo** to load the tutorial PSF and its 100-frame pulling trajectory from the surrounding project's `VMD Tutorial/tutorial-files` folder. This dataset is optional and is not bundled with the repository alone.
+5. Click **Blobulate**, then choose and apply trajectory smoothing. The PDF, CSV and MP4 export controls work as described below.
+
+**Add trajectory...** appends matching coordinate frames to the selected molecule. Atom count and order must match the structure. Existing frames, the current frame and representation settings remain intact. If the molecule is already blobulated, new protein frames inherit its sequence-based `user`/`user2` assignments. A failed append rolls back newly added frames. Loading a new protein creates a separate molecule and preserves existing molecules.
+
+The launchers find VMD through `PATH`, common Unix locations and installed macOS VMD application bundles. Set `BLOBULATOR_VMD_EXECUTABLE` to an executable path for a nonstandard installation. Set `BLOBULATOR_INSTALL_MENU=0` before launching to open the GUI without updating the startup file. No application binaries or VMD distribution are included in the repository; `launchers/Blobulator.applescript` is the source for the optional macOS app in the surrounding project.
+
+### Manual loading
+
+The Tk Console method remains available: load your protein, then source `Blob_GUI.tcl` by absolute path, for example `source {/home/yourname/blobulator/VMD_scripts/Blob_GUI.tcl}`. The scripts load their helpers relative to their own folder. For Ubuntu dependencies, verification commands and the limits of current Linux testing, see [Ubuntu compatibility](VMD_scripts/UBUNTU.md).
 
 ## Optional Settings:
 * Select the residues you wish to blobulate (defaults to "all").
@@ -269,3 +268,14 @@ xvfb-run -a tclsh /path/to/blobulator/VMD_scripts/tests/tk_smoothing_smoke.tcl
 ```
 
 These widget checks simulate VMD context. See [Ubuntu compatibility](VMD_scripts/UBUNTU.md) for dependencies, tested versions and the pending integration checks inside Linux VMD.
+
+### Testing file loading and menu setup
+
+From `VMD_scripts`, run the loading integration suite in VMD and the startup-file tests in system Tcl:
+
+```sh
+vmd -dispdev text -e tests/blob_loader.test
+tclsh tests/menu_install.test
+```
+
+The loading suite covers PDB and PSF/DCD loading, missing coordinates and malformed files, independent molecule targeting, appending frames, preserving existing coordinates/annotations and smoothing, partial-load rollback, and busy guards. The menu tests use disposable startup files and check safe quoting, preservation/backups, idempotence and registration. Neither menu testing nor `--portable-only` modifies your real startup file.

@@ -1,8 +1,10 @@
 # Ubuntu compatibility
 
-The smoothing, PDF, CSV and MP4 implementations use VMD's Tcl API and standard Tcl/Tk. They contain no macOS framework or screen-capture dependency. Keep the five plugin Tcl files together, including their exact capitalization (`Blob_GUI.tcl`). Tcl 8.5 or later and Tk with ttk are required; VMD normally supplies these. The code does not require Python, Microsoft Office, Ghostscript, CUDA or a separately installed Tachyon executable.
+The smoothing, PDF, CSV and MP4 implementations use VMD's Tcl API and standard Tcl/Tk. They contain no macOS framework or screen-capture dependency. Keep the complete `VMD_scripts` folder together, including their exact capitalization (`Blob_GUI.tcl`). Tcl 8.5 or later and Tk with ttk are required; VMD normally supplies these. The code does not require Python, Microsoft Office, Ghostscript, CUDA or a separately installed Tachyon executable.
 
 ## Install on Ubuntu
+
+For the graphical workflow, run `Open_Blobulator.sh` once. It opens VMD with Blobulator and installs the user Extensions > Analysis > Blobulator menu entry. Use Load protein and Add trajectory to browse for files. The optional ubiquitin demo needs the tutorial data in the surrounding project. See the repository Quickstart for configuration and startup-file backups.
 
 1. Install a **Linux VMD build matching the computer architecture**, with graphical Tk support and the `TachyonInternal` renderer offering PPM output. Obtain it from the [official VMD download page](https://www.ks.uiuc.edu/Development/Download/download.cgi?PackageName=VMD), which requires a registered login. The Mac `.app` and Mac FFmpeg executable cannot be copied to Ubuntu and run. The tested VMD release on macOS is 1.9.4a57; other VMD releases still require the checks below. The official Linux downloads listed at audit time target Intel/AMD x86_64; the ARM64 VM used for helper testing does not establish VMD support on ARM64 Linux.
 2. For MP4 export, install Ubuntu's encoder:
@@ -14,17 +16,11 @@ The smoothing, PDF, CSV and MP4 implementations use VMD's Tcl API and standard T
    ```
 
    The exporter discovers `/usr/bin/ffmpeg` even if VMD's launcher has a restricted `PATH`. You can also select the executable in the movie dialog or launch VMD with `BLOBULATOR_FFMPEG=/usr/bin/ffmpeg vmd`. PDF and CSV do not need FFmpeg. Ubuntu's package is documented [here](https://packages.ubuntu.com/noble/ffmpeg).
-3. Start graphical VMD in a desktop session. In its Tk Console, source the plugin, using your actual location:
-
-   ```tcl
-   source {/home/yourname/your project/blobulator/VMD_scripts/Blob_GUI.tcl}
-   ```
-
-   Neither loading the GUI nor subsequent blobulation requires changing the console's working directory. Load the ubiquitin PSF and trajectory through VMD as usual.
+3. Run `Open_Blobulator.sh` from the repository in a desktop session. On later starts, use **VMD Main > Extensions > Analysis > Blobulator**. Click **Load protein...** to browse for a structure and matching coordinates, or use **Load ubiquitin demo** when the surrounding tutorial dataset is installed. Click **Blobulate** after loading. No Tk Console commands are needed.
 
 ## What has actually been tested
 
-Audit date: 6 November 2026. Results are deliberately separated by environment.
+Initial audit: 6 November 2026. The launcher and protein-loading additions were checked on 7 November 2026. Results are separated by environment.
 
 | Environment | Checks | Result |
 | --- | --- | --- |
@@ -33,6 +29,8 @@ Audit date: 6 November 2026. Results are deliberately separated by environment.
 | Same Ubuntu VM, Poppler and FFmpeg/FFprobe | Open the two saved example PDFs; parse both 76-row/16-column CSV files and compare their annotations; fully decode the two exported MP4s and all three MP4s embedded in the presentation | Passed; exported movies each have 100 frames at 8 FPS, H.264/yuv420p |
 | Same Ubuntu VM | Discover FFmpeg with `PATH` unavailable; check the Linux walkthrough launcher's arguments and paths containing spaces; reject a full verification run when Linux VMD is absent | Passed; launcher uses a stub executable for this check |
 | macOS ARM64, VMD 1.9.4a57, Tcl 8.6.12, FFmpeg 9.0 | Full VMD integration: 16 smoothing, 19 PDF/CSV and 18 movie tests, including loading/using the plugin from another directory | 53 passed, 0 skipped, 0 failed |
+| macOS ARM64, same VMD, 7 November | Repeat the 53 regression checks plus 12 protein-loading tests; native menu startup, demo, PSF/DCD form, trajectory append, preservation of existing coordinates/annotations/smoothing, and CSV export from an appended frame | 65 integration tests passed; native GUI checks passed |
+| Ubuntu 24.04.5 ARM64, 7 November | Repeat 8 portable helpers, 7 menu/startup-file tests and both Tk checks, now including the protein-loading form | All passed; Tk widgets use a simulated VMD context |
 | Ubuntu with Linux VMD | Full molecular rendering, actual representation smoothing, camera/state restoration and native desktop save dialogs | **Pending**; no authorized Linux VMD installation was available for this audit |
 
 The helper tests create synthetic image data; they do not replace VMD integration tests. Xvfb widget checks also do not establish behavior under the lab's desktop window manager or graphics driver. No blanket guarantee is made for every Ubuntu or VMD release.
@@ -46,7 +44,7 @@ sudo apt install tcl tk xvfb xauth poppler-utils
 sh /path/to/blobulator/VMD_scripts/tests/run_ubuntu_checks.sh
 ```
 
-The runner can be invoked from any working directory. It includes both Tk checks: export/video widgets and smoothing Apply/Return bindings with retained settings/callbacks on reopening. Set `BLOBULATOR_VMD_EXECUTABLE` if `vmd` is not on `PATH`, and optionally provide a log directory as its argument. It fails if a suite fails, skips required checks, omits its result marker, times out, or Linux VMD is missing. It does not download or install VMD.
+The runner can be invoked from any working directory. It also runs the startup-file tests and loading integration suite. It includes both Tk checks: export/video widgets and smoothing Apply/Return bindings with retained settings/callbacks on reopening. Set `BLOBULATOR_VMD_EXECUTABLE` if `vmd` is not on `PATH`, and optionally provide a log directory as its argument. It fails if a suite fails, skips required checks, omits its result marker, times out, or Linux VMD is missing. It does not download or install VMD.
 
 To check only the portable helpers and Tk widgets, explicitly use:
 

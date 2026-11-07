@@ -14,9 +14,17 @@ proc assert {condition message} {
 set result [catch {
     source [file join $pluginDir Blob_GUI.tcl]
     update
-    foreach widget {.blob.smoothing .blob.applySmoothing .blob.exports.pdf .blob.exports.csv .blob.exports.video} {
+    foreach widget {.blob.files.load .blob.files.trajectory .blob.files.demo .blob.smoothing .blob.applySmoothing .blob.exports.pdf .blob.exports.csv .blob.exports.video} {
         assert {[winfo ismapped $widget]} "Control is not mapped: $widget"
     }
+    .blob.files.load invoke
+    update
+    assert {[grab current] eq ".blobLoad"} {Protein loader modal grab failed}
+    foreach widget {loadStructure loadTrajectory browse0 browse1 load cancel} {
+        assert {[winfo ismapped .blobLoad.$widget]} "Protein loader control is not mapped: $widget"
+    }
+    .blobLoad.cancel invoke
+    assert {![winfo exists .blobLoad]} {Protein-load cancellation did not close the dialog}
     # Supply a simulated context only to exercise the real options-window code.
     rename ::blobulator::exportContext ::blobulator::savedExportContext
     proc ::blobulator::exportContext {args} {return {molid 0}}
@@ -37,6 +45,7 @@ set result [catch {
     update
     assert {$::blobulator::smoothingWindow == 3} {Reopening lost the applied value}
     assert {[winfo ismapped .blob.exports.video]} {Reopening lost the export controls}
+    assert {[winfo ismapped .blob.files.load]} {Reopening lost the protein-loading controls}
     puts "Tk [package provide Tk]; window system [tk windowingsystem]"
 } message options]
 if {$result} {
