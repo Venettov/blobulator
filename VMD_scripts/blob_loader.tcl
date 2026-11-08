@@ -212,12 +212,14 @@ proc ::blobulator::addTrajectoryFromGUI {} {
 proc ::blobulator::loadUbiquitinExample {} {
     variable loaderDirectory
     variable blobs
-    set dataDir [file join [file dirname [file dirname $loaderDirectory]] {VMD Tutorial} tutorial-files]
+    variable loadStatus
+    set dataDir [file join $loaderDirectory demo ubiquitin]
     if {[catch {
         set molid [loadProteinFiles [file join $dataDir ubiquitin.psf] [file join $dataDir pulling.dcd]]
         loadedProtein $molid
     } message]} {
-        tk_messageBox -parent $blobs -icon error -type ok -title "Ubiquitin demo" -message "$message\n\nYou can use Load protein to choose another dataset."
+        set loadStatus "Unable to load the bundled ubiquitin demo."
+        tk_messageBox -parent $blobs -icon error -type ok -title "Ubiquitin demo" -message "$message\n\nRestore VMD_scripts/demo/ubiquitin from a complete copy of the repository, or use Load protein to choose your own files."
         return 0
     }
     return 1

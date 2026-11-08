@@ -137,14 +137,14 @@ This plugin allows users to blobulate and view blobs on a protein structure in V
 
 ## Installation guide:
 
-Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `blobulation.tcl`, `normalized_hydropathyscales.tcl`, `blob_exports.tcl`, `blob_video.tcl`, `blob_loader.tcl`, `blob_gui_actions.tcl` and `blob_help.tcl`. The menu/launcher also uses `blobulator_plugin.tcl`, `pkgIndex.tcl` and `start_blobulator.tcl`.
+Keep the complete `VMD_scripts` folder together, including its `demo/ubiquitin` subfolder. The GUI uses `Blob_GUI.tcl`, `blobulation.tcl`, `normalized_hydropathyscales.tcl`, `blob_exports.tcl`, `blob_video.tcl`, `blob_loader.tcl`, `blob_gui_actions.tcl` and `blob_help.tcl`. The menu/launcher also uses `blobulator_plugin.tcl`, `pkgIndex.tcl` and `start_blobulator.tcl`.
 
 ## Quickstart:
 
 1. On macOS, double-click **Open_Blobulator.command** in the repository. The surrounding mini-project also supplies **Blobulator.app**, which opens VMD without a Terminal window. On Ubuntu, run `Open_Blobulator.sh` once from the file manager's Run option or from the operating-system terminal.
 2. Blobulator opens in a new graphical VMD session. The first launch adds a managed entry to your user `~/.vmdrc`, so future sessions can open it through **VMD Main > Extensions > Analysis > Blobulator**. Existing startup settings are preserved and backed up before a change. Repeat launches do not duplicate the entry. If the project moves, launch it again to refresh its path.
 3. Click **Load protein...**, browse to a PDB or PSF structure, optionally choose a matching trajectory/coordinate file, and click **Load protein**. A PSF requires coordinates, for example `ubiquitin.psf` with `pulling.dcd`. The selected molecule and protein selection update automatically.
-4. Alternatively, click **Load ubiquitin demo** to load the tutorial PSF and its 100-frame pulling trajectory from the surrounding project's `VMD Tutorial/tutorial-files` folder. This dataset is optional and is not bundled with the repository alone.
+4. Alternatively, click **Load ubiquitin demo** to load the bundled `ubiquitin.psf` and its 100-frame `pulling.dcd` trajectory. Both files are included in `VMD_scripts/demo/ubiquitin` and work offline from a standalone checkout or repository ZIP. No separate tutorial folder is required. See the [demo data notes](VMD_scripts/demo/ubiquitin/README.txt) for source attribution and checksums.
 5. Click **Blobulate**, then choose and apply trajectory smoothing. The PDF, CSV and MP4 export controls work as described below.
 
 Click an action once and wait for the loading, blobulating or exporting message to finish. The main controls disable and show a busy cursor during an operation, then restore automatically. Movie cancellation stays available in the export window. Blobulator fits the camera after the first successful blobulation so the protein is visible; later parameter changes preserve the view.

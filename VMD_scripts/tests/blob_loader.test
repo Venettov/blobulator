@@ -3,8 +3,10 @@ namespace eval :: {
 package require tcltest 2
 namespace import ::tcltest::test
 ::tcltest::configure -verbose {start pass error}
+set loaderScriptDir [file dirname [file dirname [file normalize [info script]]]]
 source Blob_GUI.tcl
 set ::blobulator::blobs .blob
+proc tk_messageBox {args} {set ::loaderMessage $args;return ok}
 set exportDir [::tcltest::makeDirectory blob_loader_test_output]
 source tests/export_test_helpers.tcl
 set fixture [exportFixture {A} {} 0 5]
@@ -20,6 +22,20 @@ $s writepdb $pdb
 $s writepsf $psf
 animate write dcd $dcd beg 0 end 4 waitfor all sel $s $fixture
 $s delete
+# A self-contained installation with spaces in its path and no neighboring
+# tutorial folder. Copy only runtime scripts and the data shipped with them.
+set standaloneScripts [file join $exportDir {standalone checkout} VMD_scripts]
+file mkdir $standaloneScripts
+foreach script [glob -directory $loaderScriptDir *.tcl] {file copy $script $standaloneScripts}
+file copy [file join $loaderScriptDir demo] $standaloneScripts
+proc useStandaloneDemo {} {
+    uplevel #0 [list source [file join $::standaloneScripts Blob_GUI.tcl]]
+}
+proc restoreLoader {} {
+    cd $::loaderScriptDir
+    uplevel #0 [list source [file join $::loaderScriptDir Blob_GUI.tcl]]
+    loaderCleanup
+}
 proc loaderCleanup {} {
     foreach m [molinfo list] {mol delete $m}
     array unset ::blobulator::blobRepNames
@@ -142,6 +158,61 @@ test load-3.2 {file type detection handles upper-case common extensions} -body {
     list [::blobulator::loadFileOptions TEST.PSF] [::blobulator::loadFileOptions TEST.DCD] \
         [::blobulator::loadFileOptions TEST.PDB]
 } -result {{type psf} {type dcd} {type pdb}}
+
+test load-4.1 {standalone installation loads bundled demo from a different working directory} -setup {
+    cd $exportDir
+    useStandaloneDemo
+    set existing [::blobulator::loadProteinFiles $pdb]
+    set before [loaderData $existing]
+} -body {
+    set loaded [::blobulator::loadUbiquitinExample]
+    set m $::blobulator::MolID
+    set alpha [atomselect $m {protein and name CA}]
+    set residues [$alpha num]
+    $alpha delete
+    list $loaded [molinfo $m get numatoms] [molinfo $m get numframes] $residues \
+        $::blobulator::select $::blobulator::isFirstTimeBlobulating \
+        [expr {$before eq [loaderData $existing]}] \
+        [string match {*100 frames. Click Blobulate.*} $::blobulator::loadStatus] \
+        [file exists [file join $exportDir {VMD Tutorial} tutorial-files]]
+} -cleanup {restoreLoader} -result {1 26190 100 76 protein 0 1 1 0}
+
+test load-4.2 {bundled demo supports blobulation, smoothing 0 and 3, and CSV export} -setup {
+    useStandaloneDemo
+    ::blobulator::loadUbiquitinExample
+} -body {
+    ::blobulator::blobulateGUI
+    set values {}
+    foreach window {0 3} {
+        set ::blobulator::smoothingWindow $window
+        ::blobulator::applyTrajectorySmoothing
+        set settings {}
+        foreach name $::blobulator::blobRepNames($::blobulator::MolID) {
+            lappend settings [mol smoothrep $::blobulator::MolID [mol repindex $::blobulator::MolID $name]]
+        }
+        lappend values [lsort -unique $settings]
+    }
+    set rows [::blobulator::exportBlobCSV [file join $exportDir bundled_demo.csv]]
+    list $values $rows $::blobulator::loadBusy
+} -cleanup {restoreLoader} -result {{0 3} 76 0}
+
+test load-4.3 {an incomplete installation gives repair guidance and preserves existing molecules} -setup {
+    useStandaloneDemo
+    set existing [::blobulator::loadProteinFiles $pdb]
+    set before [loaderData $existing]
+    set original [file join $standaloneScripts demo ubiquitin pulling.dcd]
+    file rename $original ${original}.missing
+    set ::loaderMessage {}
+} -body {
+    set loaded [::blobulator::loadUbiquitinExample]
+    list $loaded [expr {[molinfo list] eq [list $existing]}] \
+        [expr {$before eq [loaderData $existing]}] $::blobulator::loadBusy \
+        [string match {*Restore VMD_scripts/demo/ubiquitin*} $::loaderMessage] \
+        $::blobulator::loadStatus
+} -cleanup {
+    file rename ${original}.missing $original
+    restoreLoader
+} -result {0 1 1 0 1 {Unable to load the bundled ubiquitin demo.}}
 
 set failed $::tcltest::numTests(Failed)
 puts "BLOB_LOADER_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"

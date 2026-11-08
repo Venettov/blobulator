@@ -42,7 +42,7 @@ Start with a protein
 
 1. Click Load protein... and browse to a PDB or PSF structure. A PSF also needs a matching coordinate or trajectory file, such as a DCD. Click Load protein in that dialog.
 
-2. Or click Load ubiquitin demo. This uses the optional VMD Tutorial/tutorial-files dataset in the surrounding mini-project. The repository alone does not include the demo files.
+2. Or click Load ubiquitin demo. The repository includes the ubiquitin structure and its 100-frame pulling trajectory in VMD_scripts/demo/ubiquitin. No separate tutorial download or internet connection is needed.
 
 3. Check Mol ID and Selection. Loading sets them automatically. For a molecule already open in VMD, use its numeric ID from VMD Main. Selection accepts VMD atom-selection expressions, for example protein or chain A. Press Return after editing either field.
 
@@ -104,7 +104,7 @@ No protein / no coordinates: load a PDB, or a PSF together with matching coordin
 
 Buttons are disabled: an operation is running. Read the status and wait. For movie export, Cancel remains available in its own window. A file picker, protein loader or movie-options dialog must be closed before returning to the main controls.
 
-Ubiquitin demo not found: the tutorial data are optional. Use Load protein... with your own files, or restore the surrounding project's VMD Tutorial/tutorial-files folder.
+Ubiquitin demo not found: keep the complete VMD_scripts folder, including demo/ubiquitin, together when installing or moving the extension. Restore that folder from a complete copy of the repository, or use Load protein... with your own files.
 
 Protein is outside the view: click in VMD's graphics window and press = to reset the view. Unwrapped or fitted coordinates may be needed for trajectories that jump across periodic boundaries; smoothing does not repair wrapping.
 

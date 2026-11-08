@@ -4,7 +4,7 @@ The smoothing, PDF, CSV and MP4 implementations use VMD's Tcl API and standard T
 
 ## Install on Ubuntu
 
-For the graphical workflow, run `Open_Blobulator.sh` once. It opens VMD with Blobulator and installs the user Extensions > Analysis > Blobulator menu entry. Use Load protein and Add trajectory to browse for files. The optional ubiquitin demo needs the tutorial data in the surrounding project. See the repository Quickstart for configuration and startup-file backups.
+For the graphical workflow, run `Open_Blobulator.sh` once. It opens VMD with Blobulator and installs the user Extensions > Analysis > Blobulator menu entry. Use Load protein and Add trajectory to browse for files. The ubiquitin demo is bundled in `VMD_scripts/demo/ubiquitin` and works offline; keep this subfolder with the scripts. See the repository Quickstart for configuration and startup-file backups.
 
 1. Install a **Linux VMD build matching the computer architecture**, with graphical Tk support and the `TachyonInternal` renderer offering PPM output. Obtain it from the [official VMD download page](https://www.ks.uiuc.edu/Development/Download/download.cgi?PackageName=VMD), which requires a registered login. The Mac `.app` and Mac FFmpeg executable cannot be copied to Ubuntu and run. The tested VMD release on macOS is 1.9.4a57; other VMD releases still require the checks below. The official Linux downloads listed at audit time target Intel/AMD x86_64; the ARM64 VM used for helper testing does not establish VMD support on ARM64 Linux.
 2. For MP4 export, install Ubuntu's encoder:
@@ -16,7 +16,7 @@ For the graphical workflow, run `Open_Blobulator.sh` once. It opens VMD with Blo
    ```
 
    The exporter discovers `/usr/bin/ffmpeg` even if VMD's launcher has a restricted `PATH`. You can also select the executable in the movie dialog or launch VMD with `BLOBULATOR_FFMPEG=/usr/bin/ffmpeg vmd`. PDF and CSV do not need FFmpeg. Ubuntu's package is documented [here](https://packages.ubuntu.com/noble/ffmpeg).
-3. Run `Open_Blobulator.sh` from the repository in a desktop session. On later starts, use **VMD Main > Extensions > Analysis > Blobulator**. Click **Load protein...** to browse for a structure and matching coordinates, or use **Load ubiquitin demo** when the surrounding tutorial dataset is installed. Click **Blobulate** after loading. No Tk Console commands are needed.
+3. Run `Open_Blobulator.sh` from the repository in a desktop session. On later starts, use **VMD Main > Extensions > Analysis > Blobulator**. Click **Load protein...** to browse for a structure and matching coordinates, or use the bundled **Load ubiquitin demo**. Click **Blobulate** after loading. No Tk Console commands are needed.
 
 ## What has actually been tested
 
