@@ -30,6 +30,7 @@ Initial audit: 6 November 2026. The launcher and protein-loading additions were 
 | Same Ubuntu VM | Discover FFmpeg with `PATH` unavailable; check the Linux walkthrough launcher's arguments and paths containing spaces; reject a full verification run when Linux VMD is absent | Passed; launcher uses a stub executable for this check |
 | macOS ARM64, VMD 1.9.4a57, Tcl 8.6.12, FFmpeg 9.0 | Full VMD integration: 16 smoothing, 19 PDF/CSV and 18 movie tests, including loading/using the plugin from another directory | 53 passed, 0 skipped, 0 failed |
 | macOS ARM64, same VMD, 7 November | Repeat the 53 regression checks plus 12 protein-loading tests; native menu startup, demo, PSF/DCD form, trajectory append, preservation of existing coordinates/annotations/smoothing, and CSV export from an appended frame | 65 integration tests passed; native GUI checks passed |
+| macOS ARM64, GUI responsiveness update, 7 November | 65 molecular/export regressions, 19 GUI dispatch/input/lifecycle regressions, both widget smoke scripts, 12 startup tests and 71 native mouse/keyboard checks across the controls and native dialogs | All passed; CSV/PDF saved, a three-frame MP4 fully decoded at 8 FPS, rendering cancellation left no partial movie |
 | Ubuntu 24.04.5 ARM64, 7 November | Repeat 8 portable helpers, 7 menu/startup-file tests and both Tk checks, now including the protein-loading form | All passed; Tk widgets use a simulated VMD context |
 | Ubuntu with Linux VMD | Full molecular rendering, actual representation smoothing, camera/state restoration and native desktop save dialogs | **Pending**; no authorized Linux VMD installation was available for this audit |
 
@@ -44,7 +45,7 @@ sudo apt install tcl tk xvfb xauth poppler-utils
 sh /path/to/blobulator/VMD_scripts/tests/run_ubuntu_checks.sh
 ```
 
-The runner can be invoked from any working directory. It also runs the startup-file tests and loading integration suite. It includes both Tk checks: export/video widgets and smoothing Apply/Return bindings with retained settings/callbacks on reopening. Set `BLOBULATOR_VMD_EXECUTABLE` if `vmd` is not on `PATH`, and optionally provide a log directory as its argument. It fails if a suite fails, skips required checks, omits its result marker, times out, or Linux VMD is missing. It does not download or install VMD.
+The runner can be invoked from any working directory. It also runs the startup-file tests and loading integration suite. It includes both widget smoke scripts plus `gui_actions.test`, which checks deferred actions, busy-state restoration, editable threshold drafts, cancellation and window lifecycle. The responsiveness additions use standard Tcl/Tk; their new checks have been run on this Mac, and still need repeating on the Ubuntu workstation. Set `BLOBULATOR_VMD_EXECUTABLE` if `vmd` is not on `PATH`, and optionally provide a log directory as its argument. It fails if a suite fails, skips required checks, omits its result marker, times out, or Linux VMD is missing. It does not download or install VMD.
 
 To check only the portable helpers and Tk widgets, explicitly use:
 

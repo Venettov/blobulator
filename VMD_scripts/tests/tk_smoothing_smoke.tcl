@@ -18,7 +18,7 @@ set result [catch {
     foreach widget {.blob.smoothing .blob.applySmoothing .blob.blobulate .blob.clear} {
         assert {[winfo ismapped $widget]} "Control is not mapped: $widget"
     }
-    assert {[.blob.applySmoothing cget -command] eq "::blobulator::applyTrajectorySmoothing"} {Apply callback missing}
+    assert {[string first ::blobulator::applyTrajectorySmoothing [.blob.applySmoothing cget -command]] >= 0} {Apply callback missing}
     assert {[string first ::blobulator::applyTrajectorySmoothing [bind .blob.smoothing <Return>]] >= 0} {Return callback missing}
     set ::blobulator::trajectorySmoothing 3
     set ::blobulator::smoothingWindow unfinished
@@ -29,7 +29,7 @@ set result [catch {
     assert {$::blobulator::smoothingWindow == 3} {Reopening lost applied smoothing}
     assert {$::blobulator::H == .55} {Reopening lost the threshold}
     assert {[winfo ismapped .blob.applySmoothing]} {Reopening lost Apply}
-    assert {[string first ::blobulator::blobulationSlider [bind .blob.e_Length: <Return>]] >= 0} {Reopening lost the redraw callback}
+    assert {[string first ::blobulator::applyThresholdEntries [bind .blob.e_Length: <Return>]] >= 0} {Reopening lost the redraw callback}
     puts "Tcl [info patchlevel]; Tk [package provide Tk]; window system [tk windowingsystem]"
 } message options]
 if {$result} {

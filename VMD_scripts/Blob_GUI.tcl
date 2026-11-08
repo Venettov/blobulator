@@ -1,12 +1,15 @@
+if {[llength [info commands winfo]] && [winfo exists .blob]} {
+	wm deiconify $::blobulator::blobs
+	if {[llength [info commands ::blobulator::focusGUI]]} {::blobulator::focusGUI} else {raise $::blobulator::blobs}
+	return
+}
+
+# Raising an existing window must not reload algorithms or reset an active job.
 source [file join [file dirname [info script]] blobulation.tcl]
 source [file join [file dirname [info script]] blob_exports.tcl]
 source [file join [file dirname [info script]] blob_video.tcl]
+source [file join [file dirname [info script]] blob_gui_actions.tcl]
 source [file join [file dirname [info script]] blob_loader.tcl]
-
-if {[llength [info commands winfo]] && [winfo exists .blob]} {
-	wm deiconify $::blobulator::blobs
-	return
-}
 
 namespace eval ::blobulator {
 	# Widths,Heights,Rows and Columns
@@ -64,6 +67,8 @@ namespace eval ::blobulator {
 
 	# Reopening restores the applied value and discards any unsubmitted edit.
 	variable smoothingWindow $trajectorySmoothing
+	variable HInput $H
+	variable LminInput $Lmin
 	# Stable representation names, indexed by the numeric molecule ID.
 	variable blobRepNames
 	array set blobRepNames {}
@@ -78,13 +83,14 @@ variable blobs [toplevel ".blob"]
 	wm resizable $::blobulator::blobs 0 0
 	wm attributes $::blobulator::blobs -alpha 1;
 	wm attributes $::blobulator::blobs -fullscreen 0
+	wm protocol $::blobulator::blobs WM_DELETE_WINDOW ::blobulator::closeGUI
 }
 proc ::blobulator::GUI {} {
 	::blobulator::Window
 	frame $::blobulator::blobs.files
-	pack [button $::blobulator::blobs.files.load -text "Load protein..." -command ::blobulator::proteinLoadDialog] -side left -padx 5 -pady 6
-	pack [button $::blobulator::blobs.files.trajectory -text "Add trajectory..." -command ::blobulator::addTrajectoryFromGUI] -side left -padx 5 -pady 6
-	pack [button $::blobulator::blobs.files.demo -text "Load ubiquitin demo" -command ::blobulator::loadUbiquitinExample] -side left -padx 5 -pady 6
+	pack [button $::blobulator::blobs.files.load -text "Load protein..." -command {::blobulator::queueGUIAction {Opening protein loader...} ::blobulator::proteinLoadDialog}] -side left -padx 5 -pady 6
+	pack [button $::blobulator::blobs.files.trajectory -text "Add trajectory..." -command {::blobulator::queueGUIAction {Loading trajectory...} ::blobulator::addTrajectoryFromGUI}] -side left -padx 5 -pady 6
+	pack [button $::blobulator::blobs.files.demo -text "Load ubiquitin demo" -command {::blobulator::queueGUIAction {Loading ubiquitin...} ::blobulator::loadUbiquitinExample}] -side left -padx 5 -pady 6
 	grid $::blobulator::blobs.files -row 0 -column 0 -columnspan 3
 	grid [label $::blobulator::blobs.loadStatus -textvariable ::blobulator::loadStatus -wraplength 600 -justify left] -row 1 -column 0 -columnspan 3 -sticky w -padx 5
 	grid [label $::blobulator::blobs.1_MolID -text "Mol ID:" ] -row 2 -column 0  -rowspan 2 -pady 2
@@ -103,7 +109,7 @@ proc ::blobulator::GUI {} {
 	#Hydropathy Scale grids
 	grid [label $::blobulator::blobs.t2 -text "Hydropathy Scale:" -height 2] -row 5 -column 0 -columnspan 1 -pady 2
 	grid [checkbutton $::blobulator::blobs.check -text "Auto-Update Threshold" \
-	 -variable ::blobulator::checkForUpdate -command {::blobulator::blobulationSlider }] -row 5 -column 1 -columnspan 2 -sticky e
+	 -variable ::blobulator::checkForUpdate -command {::blobulator::queueGUIAction {Updating blobs...} ::blobulator::redrawGUI}] -row 5 -column 1 -columnspan 2 -sticky e
 	grid [ttk::combobox $::blobulator::blobs.dmnu2  -textvariable ::blobulator::hydropathyScaleDictionaryList -width $::blobulator::dropDownMenuWidth \
 	 -values [list $::blobulator::hydropathyScale1 $::blobulator::hydropathyScale2 $::blobulator::hydropathyScale3] -state readonly] -pady 1 -row 5 -column 1 -columnspan 2 -sticky w
 
@@ -115,7 +121,7 @@ proc ::blobulator::GUI {} {
 	set paraList [list Hydrophobicity: ::blobulator::H .1 1 .01 ::blobulator::sliderRow Length: ::blobulator::Lmin 1 50 1 ::blobulator::sliderRow ]
 	foreach { entry namedVariable min max interval SliderRow} $paraList {
 		set entryLabels [label $::blobulator::blobs.l_$entry -text $entry]
-		set entryVariable [entry $::blobulator::blobs.e_$entry -width $::blobulator::paraWidth -textvariable $namedVariable]
+		set entryVariable [entry $::blobulator::blobs.e_$entry -width $::blobulator::paraWidth -textvariable ${namedVariable}Input]
 		set entrySlider [scale $::blobulator::blobs.s_$entry -orient horizontal -from $min -to $max -length $::blobulator::sliderLength -resolution $interval -tickinterval 0 -variable $namedVariable -showvalue 0]
 		
 		
@@ -137,36 +143,41 @@ proc ::blobulator::GUI {} {
 	grid [spinbox $::blobulator::blobs.smoothing -from 0 -to 100 -increment 1 \
 		-width $::blobulator::paraWidth -textvariable ::blobulator::smoothingWindow] -row 14 -column 1 -sticky w
 	grid [button $::blobulator::blobs.applySmoothing -text "Apply to all blobs" \
-		-command {::blobulator::applyTrajectorySmoothing}] -row 14 -column 2 -pady 2
+		-command {::blobulator::queueGUIAction {Applying smoothing...} ::blobulator::applyTrajectorySmoothing}] -row 14 -column 2 -pady 2
 	grid [label $::blobulator::blobs.smoothingHelp \
 		-text "Frames on each side; 0 turns smoothing off."] -row 15 -column 0 -columnspan 3 -pady 2
-	bind $::blobulator::blobs.smoothing <Return> {::blobulator::applyTrajectorySmoothing}
+	bind $::blobulator::blobs.smoothing <Return> {::blobulator::queueGUIAction {Applying smoothing...} ::blobulator::applyTrajectorySmoothing}
 
 	#Button grids
-	grid [button $::blobulator::blobs.blobulate -text "Blobulate"  -width $::blobulator::buttonWidth -command {blobulation } ] -row 16 -column 0 -columnspan 3
-	grid [button $::blobulator::blobs.hdefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::hDefault }] -padx 0 -pady 1 -row 9 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
-	grid [button $::blobulator::blobs.ldefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::lminDefault }] -padx 0 -pady 1 -row 11 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
-	grid [button $::blobulator::blobs.clear -text "Clear representations" -width $::blobulator::buttonWidth -command {::blobulator::blobClear $::blobulator::MolID}] -row 17 -column 0 -columnspan 3
+	grid [button $::blobulator::blobs.blobulate -text "Blobulate" -width $::blobulator::buttonWidth -command {::blobulator::queueGUIAction {Blobulating...} ::blobulator::blobulateGUI}] -row 16 -column 0 -columnspan 3
+	grid [button $::blobulator::blobs.hdefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::queueGUIAction {Updating threshold...} ::blobulator::hDefault}] -padx 0 -pady 1 -row 9 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
+	grid [button $::blobulator::blobs.ldefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::queueGUIAction {Updating length...} ::blobulator::lminDefault}] -padx 0 -pady 1 -row 11 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
+	grid [button $::blobulator::blobs.clear -text "Clear representations" -width $::blobulator::buttonWidth -command {::blobulator::queueGUIAction {Clearing representations...} {::blobulator::blobClear $::blobulator::MolID}}] -row 17 -column 0 -columnspan 3
 	frame $::blobulator::blobs.exports
 	pack [button $::blobulator::blobs.exports.pdf -text "Export image (PDF)" \
-		-command {::blobulator::exportFromGUI pdf}] -side left -padx 6 -pady 6
+		-command {::blobulator::queueGUIAction {Exporting PDF...} {::blobulator::exportFromGUI pdf}}] -side left -padx 6 -pady 6
 	pack [button $::blobulator::blobs.exports.csv -text "Export blob data (CSV)" \
-		-command {::blobulator::exportFromGUI csv}] -side left -padx 6 -pady 6
+		-command {::blobulator::queueGUIAction {Exporting CSV...} {::blobulator::exportFromGUI csv}}] -side left -padx 6 -pady 6
 	pack [button $::blobulator::blobs.exports.video -text "Export video (MP4)" \
-		-command {::blobulator::videoOptions}] -side left -padx 6 -pady 6
+		-command {::blobulator::queueGUIAction {Opening video options...} ::blobulator::videoOptions}] -side left -padx 6 -pady 6
 	grid $::blobulator::blobs.exports -row 18 -column 0 -columnspan 3
 	set ::blobulator::exportStatus "PDF/MP4: current VMD scene. CSV: selected molecule's blob data."
 	grid [label $::blobulator::blobs.exportStatus -textvariable ::blobulator::exportStatus \
 		-wraplength 600] -row 19 -column 0 -columnspan 3 -pady 2
-	bind $::blobulator::blobs.dmnu2 <<ComboboxSelected>> {hydropathyScaleDropDownMenu }
+	bind $::blobulator::blobs.dmnu2 <<ComboboxSelected>> {::blobulator::queueGUIAction {Updating hydropathy scale...} hydropathyScaleDropDownMenu}
 	# Bind each new window's widgets, including when the GUI is reopened.
 	# blobulationSlider ignores edits until Blobulate has been invoked.
-	bind $::blobulator::blobs.s_Length: <ButtonRelease> {::blobulator::blobulationSlider }
-	bind $::blobulator::blobs.s_Hydrophobicity: <ButtonRelease> {::blobulator::blobulationSlider }
-	bind $::blobulator::blobs.dmnu <<ComboboxSelected>> {::blobulator::blobulationSlider }
-	bind $::blobulator::blobs.e_Length: <Return> {::blobulator::blobulationSlider }
-	bind $::blobulator::blobs.e_Hydrophobicity: <Return> {::blobulator::blobulationSlider }
-	bind $::blobulator::blobs.select <Return> {::blobulator::blobulationSlider }
+	foreach {widget parameter} {s_Length: Lmin s_Hydrophobicity: H} {
+		bind $::blobulator::blobs.$widget <ButtonRelease> [list ::blobulator::queueGUIAction {Updating blobs...} [list ::blobulator::applyThresholdSlider $parameter]]
+	}
+	bind $::blobulator::blobs.dmnu <<ComboboxSelected>> {::blobulator::queueGUIAction {Updating colors...} ::blobulator::redrawGUI}
+	foreach widget {e_Length: e_Hydrophobicity:} {
+		bind $::blobulator::blobs.$widget <Return> {::blobulator::queueGUIAction {Applying thresholds...} ::blobulator::applyThresholdEntries}
+	}
+	foreach widget {select tv_MolID} {
+		bind $::blobulator::blobs.$widget <Return> {::blobulator::queueGUIAction {Updating blobs...} ::blobulator::redrawGUI}
+	}
+	after idle ::blobulator::focusGUI
 	
 
 
@@ -353,7 +364,7 @@ proc hydropathyScaleDropDownMenu {} {
 	if {$::blobulator::checkForUpdate == 1} {
 		::blobulator::hDefault
 	} else {
-		::blobulator::blobulationSlider
+		::blobulator::redrawGUI
 	}
 return
 }
@@ -370,7 +381,8 @@ return
 proc ::blobulator::lminDefault {} {
 	
 	set ::blobulator::Lmin 4
-	::blobulator::blobulationSlider 
+	set ::blobulator::LminInput 4
+	::blobulator::redrawGUI
 return
 }
 
@@ -398,8 +410,9 @@ proc ::blobulator::hDefault {} {
 	if {$::blobulator::hydropathyScaleDictionaryList == "Moon-Fleming"} {
 		set ::blobulator::H .35
 	}
+	set ::blobulator::HInput $::blobulator::H
 
-	::blobulator::blobulationSlider 
+	::blobulator::redrawGUI
 
 	return
 }

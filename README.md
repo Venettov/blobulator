@@ -137,7 +137,7 @@ This plugin allows users to blobulate and view blobs on a protein structure in V
 
 ## Installation guide:
 
-Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `blobulation.tcl`, `normalized_hydropathyscales.tcl`, `blob_exports.tcl`, `blob_video.tcl` and `blob_loader.tcl`. The menu/launcher also uses `blobulator_plugin.tcl`, `pkgIndex.tcl` and `start_blobulator.tcl`.
+Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `blobulation.tcl`, `normalized_hydropathyscales.tcl`, `blob_exports.tcl`, `blob_video.tcl`, `blob_loader.tcl` and `blob_gui_actions.tcl`. The menu/launcher also uses `blobulator_plugin.tcl`, `pkgIndex.tcl` and `start_blobulator.tcl`.
 
 ## Quickstart:
 
@@ -146,6 +146,10 @@ Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `b
 3. Click **Load protein...**, browse to a PDB or PSF structure, optionally choose a matching trajectory/coordinate file, and click **Load protein**. A PSF requires coordinates, for example `ubiquitin.psf` with `pulling.dcd`. The selected molecule and protein selection update automatically.
 4. Alternatively, click **Load ubiquitin demo** to load the tutorial PSF and its 100-frame pulling trajectory from the surrounding project's `VMD Tutorial/tutorial-files` folder. This dataset is optional and is not bundled with the repository alone.
 5. Click **Blobulate**, then choose and apply trajectory smoothing. The PDF, CSV and MP4 export controls work as described below.
+
+Click an action once and wait for the loading, blobulating or exporting message to finish. The main controls disable and show a busy cursor during an operation, then restore automatically. Movie cancellation stays available in the export window. Blobulator fits the camera after the first successful blobulation so the protein is visible; later parameter changes preserve the view.
+
+Threshold text fields can be cleared and edited freely. Press Return to apply the entries, or click Blobulate to apply them together. Sliders and Default buttons apply their values immediately. Invalid values produce a message and leave the controls usable. Reopening the window restores applied threshold values and discards unfinished edits.
 
 **Add trajectory...** appends matching coordinate frames to the selected molecule. Atom count and order must match the structure. Existing frames, the current frame and representation settings remain intact. If the molecule is already blobulated, new protein frames inherit its sequence-based `user`/`user2` assignments. A failed append rolls back newly added frames. Loading a new protein creates a separate molecule and preserves existing molecules.
 
@@ -281,3 +285,5 @@ tclsh tests/menu_install.test
 ```
 
 The loading suite covers PDB and PSF/DCD loading, missing coordinates and malformed files, independent molecule targeting, appending frames, preserving existing coordinates/annotations and smoothing, partial-load rollback, and busy guards. The menu tests use disposable startup files and check safe quoting, preservation/backups, idempotence, registration, loading VMD's default startup and opening VMD Main. They also check repair of earlier Blobulator-only startup files and retention of custom window preferences. Neither menu testing nor `--portable-only` modifies your real startup file.
+
+The additional `gui_actions.test` suite checks deferred dispatch, duplicate-click protection, restoration after errors, modal cancellation, closing/reopening, movie-cancel availability and editable threshold drafts. On Linux run `xvfb-run -a tclsh VMD_scripts/tests/gui_actions.test`, or use the Ubuntu runner. Core Tcl procedures remain synchronous for scripts; GUI actions run after their widget command returns.

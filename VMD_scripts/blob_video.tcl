@@ -251,15 +251,16 @@ proc ::blobulator::videoOptions {} {
         -variable ::blobulator::videoFollow] -row 4 -column 0 -columnspan 3 -sticky w -padx 10
     grid [label .blobVideo.encoderLabel -text "FFmpeg executable"] -row 5 -column 0 -sticky w -padx 10
     grid [entry .blobVideo.encoder -textvariable ::blobulator::videoFFmpeg -width 32] -row 5 -column 1 -padx 4
-    grid [button .blobVideo.browse -text "Browse..." -command ::blobulator::browseVideoFFmpeg] -row 5 -column 2 -padx 10
+    grid [button .blobVideo.browse -text "Browse..." -command {::blobulator::queueGUIAction {Choosing encoder...} ::blobulator::browseVideoFFmpeg .blobVideo}] -row 5 -column 2 -padx 10
     grid [label .blobVideo.message -textvariable ::blobulator::videoMessage -wraplength 530 -justify left] \
         -row 6 -column 0 -columnspan 3 -sticky w -padx 10 -pady 8
     grid [ttk::progressbar .blobVideo.progress -maximum 100 -variable ::blobulator::videoProgress] \
         -row 7 -column 0 -columnspan 3 -sticky ew -padx 10 -pady 4
-    grid [button .blobVideo.start -text "Save MP4..." -command ::blobulator::exportVideoFromGUI] -row 8 -column 1 -pady 10
+    grid [button .blobVideo.start -text "Save MP4..." -command {::blobulator::queueGUIAction {Exporting video...} ::blobulator::exportVideoFromGUI .blobVideo}] -row 8 -column 1 -pady 10
     grid [button .blobVideo.cancel -text "Cancel" -command ::blobulator::cancelVideoExport] -row 8 -column 2 -pady 10
     update idletasks
     grab set .blobVideo
+    focusGUI .blobVideo
 }
 
 proc ::blobulator::browseVideoFFmpeg {} {
@@ -271,7 +272,7 @@ proc ::blobulator::browseVideoFFmpeg {} {
 proc ::blobulator::cancelVideoExport {} {
     variable videoBusy
     variable videoCancel
-    if {$videoBusy} {set videoCancel 1} else {destroy .blobVideo}
+    if {$videoBusy} {set videoCancel 1} else {destroy .blobVideo;focusGUI}
 }
 
 proc ::blobulator::videoProgressUpdate {completed total frame} {

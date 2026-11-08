@@ -132,20 +132,21 @@ proc ::blobulator::proteinLoadDialog {} {
         grid [label .blobLoad.label$row -text $label] -row $row -column 0 -sticky w -padx 10 -pady 8
         grid [entry .blobLoad.$variableName -textvariable ::blobulator::$variableName -width 40] -row $row -column 1 -padx 6
         .blobLoad.$variableName xview end
-        grid [button .blobLoad.browse$row -text "Browse..." -command [list ::blobulator::browseProteinFile $variableName]] -row $row -column 2 -padx 10
+        grid [button .blobLoad.browse$row -text "Browse..." -command [list ::blobulator::queueGUIAction {Choosing file...} [list ::blobulator::browseProteinFile $variableName] .blobLoad]] -row $row -column 2 -padx 10
     }
     grid [label .blobLoad.hint -text "A PSF needs matching coordinates. Trajectory atoms must match the structure and its atom order." -wraplength 660 -justify left] -row 2 -column 0 -columnspan 3 -sticky w -padx 10 -pady 6
-    grid [button .blobLoad.load -text "Load protein" -command ::blobulator::loadProteinFromGUI] -row 3 -column 1 -pady 10
+    grid [button .blobLoad.load -text "Load protein" -command {::blobulator::queueGUIAction {Loading protein...} ::blobulator::loadProteinFromGUI .blobLoad}] -row 3 -column 1 -pady 10
     grid [button .blobLoad.cancel -text "Cancel" -command ::blobulator::closeProteinLoadDialog] -row 3 -column 2 -pady 10
-    bind .blobLoad <Return> {::blobulator::loadProteinFromGUI}
+    bind .blobLoad <Return> {::blobulator::queueGUIAction {Loading protein...} ::blobulator::loadProteinFromGUI .blobLoad}
     bind .blobLoad <Escape> {::blobulator::closeProteinLoadDialog}
     update idletasks
     grab set .blobLoad
+    focusGUI .blobLoad
 }
 
 proc ::blobulator::closeProteinLoadDialog {} {
     variable loadBusy
-    if {!$loadBusy} {destroy .blobLoad}
+    if {!$loadBusy} {destroy .blobLoad;focusGUI}
 }
 
 proc ::blobulator::browseProteinFile {variableName} {

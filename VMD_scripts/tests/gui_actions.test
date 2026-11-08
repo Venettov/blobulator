@@ -1,0 +1,187 @@
+# Tk regression checks; use xvfb-run tclsh on Linux or graphical VMD -e.
+namespace eval :: {
+package require Tk 8.5
+package require tcltest 2
+namespace import ::tcltest::test
+::tcltest::configure -verbose {start pass error}
+wm withdraw .
+set pluginDir [file dirname [file dirname [file normalize [info script]]]]
+if {![llength [info commands atomselect]]} {
+    proc atomselect {args} {if {[lindex $args 0] eq "macro"} {return};error "No molecule in widget-only tests"}
+}
+source [file join $pluginDir Blob_GUI.tcl]
+update
+rename tk_messageBox guiActualMessageBox
+proc tk_messageBox {args} {set ::guiMessage $args;return ok}
+proc guiDrain {} {
+    set deadline [expr {[clock milliseconds]+2000}]
+    while {$::blobulator::guiBusy && [clock milliseconds] < $deadline} {update}
+    if {$::blobulator::guiBusy} {error "GUI action did not finish"}
+    update
+}
+proc guiReset {} {
+    if {$::blobulator::guiTimer ne ""} {after cancel $::blobulator::guiTimer}
+    ::blobulator::finishGUIAction
+    if {![winfo exists .blob]} {source [file join $::pluginDir Blob_GUI.tcl];update}
+    set ::blobulator::H .4
+    set ::blobulator::Lmin 4
+    set ::blobulator::HInput .4
+    set ::blobulator::LminInput 4
+    set ::blobulator::isFirstTimeBlobulating 0
+    set ::guiCount 0
+    set ::guiMessage {}
+}
+guiReset
+test gui-1.1 {work runs after the widget command has returned, once} -body {
+    set first [::blobulator::queueGUIAction Working {incr ::guiCount;set ::observedRelease $::releaseFinished}]
+    set second [::blobulator::queueGUIAction Duplicate {incr ::guiCount}]
+    set before $::guiCount
+    set ::releaseFinished 1
+    guiDrain
+    list $first $second $before $::guiCount $::observedRelease
+} -cleanup {guiReset} -result {1 0 0 1 1}
+test gui-1.2 {controls disable while pending, including entries and drop-downs} -body {
+    ::blobulator::queueGUIAction Working {incr ::guiCount}
+    set states [list [.blob.blobulate cget -state] [.blob.select cget -state] [.blob.dmnu cget -state] [.blob.smoothing cget -state]]
+    guiDrain
+    list $states [.blob.blobulate cget -state] [.blob.dmnu cget -state]
+} -cleanup {guiReset} -result {{disabled disabled disabled disabled} normal readonly}
+test gui-1.3 {nested event processing cannot start overlapping work} -body {
+    ::blobulator::queueGUIAction Working {
+        set ::nestedAccepted [::blobulator::queueGUIAction Duplicate {incr ::guiCount}]
+        update idletasks
+        incr ::guiCount
+    }
+    guiDrain
+    list $::nestedAccepted $::guiCount
+} -cleanup {guiReset} -result {0 1}
+test gui-1.4 {errors restore controls and cursor and permit the next action} -body {
+    set cursor [.blob cget -cursor]
+    ::blobulator::queueGUIAction Working {error {test failure}}
+    guiDrain
+    set failed [list $::blobulator::guiError [.blob.blobulate cget -state] [expr {[.blob cget -cursor] eq $cursor}]]
+    ::blobulator::queueGUIAction Recovered {incr ::guiCount}
+    guiDrain
+    list $failed $::guiCount $::blobulator::guiBusy
+} -cleanup {guiReset} -result {{{test failure} normal 1} 1 0}
+test gui-1.5 {closing while queued cancels the action} -body {
+    ::blobulator::queueGUIAction Working {incr ::guiCount}
+    ::blobulator::closeGUI
+    update
+    list $::guiCount $::blobulator::guiBusy [winfo exists .blob]
+} -cleanup {guiReset} -result {0 0 0}
+test gui-1.19 {a modal closed during the UI refresh cancels before work starts} -body {
+    toplevel .guiOwner
+    after idle {destroy .guiOwner}
+    ::blobulator::queueGUIAction Working {incr ::guiCount} .guiOwner
+    guiDrain
+    list $::guiCount $::blobulator::guiBusy [.blob.blobulate cget -state]
+} -cleanup {guiReset} -result {0 0 normal}
+test gui-1.6 {a closed modal owner prevents its pending load from running} -body {
+    toplevel .guiOwner
+    ::blobulator::queueGUIAction Working {incr ::guiCount} .guiOwner
+    destroy .guiOwner
+    guiDrain
+    list $::guiCount $::blobulator::guiBusy [.blob.blobulate cget -state]
+} -cleanup {guiReset} -result {0 0 normal}
+test gui-1.7 {movie cancel remains enabled while work owns the main controls} -body {
+    toplevel .guiMovie
+    button .guiMovie.cancel -text Cancel
+    ::blobulator::queueGUIAction Working {incr ::guiCount}
+    set state [.guiMovie.cancel cget -state]
+    guiDrain
+    destroy .guiMovie
+    set state
+} -cleanup {guiReset} -result normal
+test gui-1.8 {invalid length produces a GUI error and does not mark blobulation complete} -body {
+    set ::blobulator::LminInput bad
+    .blob.blobulate invoke
+    guiDrain
+    list [string match {*positive whole number*} $::blobulator::guiError] $::blobulator::isFirstTimeBlobulating [.blob.blobulate cget -state]
+} -cleanup {guiReset} -result {1 0 normal}
+test gui-1.9 {invalid hydrophobicity is rejected before any molecule operation} -body {
+    set result {}
+    foreach value {bad NaN Inf -0.1 1.1} {
+        set ::blobulator::HInput $value
+        lappend result [catch {::blobulator::applyGUIInputs} message] [string match {*between 0 and 1*} $message]
+    }
+    set result
+} -cleanup {guiReset} -result {1 1 1 1 1 1 1 1 1 1}
+test gui-1.10 {loading form opens through the deferred button and cancels cleanly} -body {
+    .blob.files.load invoke
+    guiDrain
+    set modal [grab current]
+    .blobLoad.cancel invoke
+    list $modal [winfo exists .blobLoad] [grab current] $::blobulator::guiBusy
+} -cleanup {guiReset} -result {.blobLoad 0 {} 0}
+test gui-1.11 {a reopened window still opens the loader through deferred dispatch} -body {
+    destroy .blob
+    source [file join $pluginDir Blob_GUI.tcl]
+    update
+    set accepted [.blob.files.load invoke]
+    set before [winfo exists .blobLoad]
+    guiDrain
+    set modal [grab current]
+    .blobLoad.cancel invoke
+    list $accepted $before $modal $::blobulator::guiBusy
+} -cleanup {guiReset} -result {1 0 .blobLoad 0}
+test gui-1.12 {closing while a callback runs keeps its controls alive} -body {
+    ::blobulator::queueGUIAction Working {::blobulator::closeGUI;set ::guiWasAlive [winfo exists .blob]}
+    guiDrain
+    list $::guiWasAlive [winfo exists .blob] $::blobulator::guiBusy $::blobulator::loadStatus
+} -cleanup {guiReset} -result {1 1 0 Ready.}
+test gui-1.13 {clearing threshold text keeps sliders and applied settings intact} -body {
+    .blob.e_Hydrophobicity: delete 0 end
+    .blob.e_Length: delete 0 end
+    list [expr {$::blobulator::H == .4}] $::blobulator::Lmin [expr {[.blob.s_Hydrophobicity: get] == .4}] [.blob.s_Length: get]
+} -cleanup {guiReset} -result {1 4 1 4}
+test gui-1.14 {valid draft thresholds commit together when applied} -body {
+    .blob.e_Hydrophobicity: delete 0 end
+    .blob.e_Hydrophobicity: insert 0 .55
+    .blob.e_Length: delete 0 end
+    .blob.e_Length: insert 0 6
+    set before [list [expr {$::blobulator::H == .4}] $::blobulator::Lmin]
+    ::blobulator::queueGUIAction Applying ::blobulator::applyThresholdEntries
+    guiDrain
+    list $before [expr {$::blobulator::H == .55}] $::blobulator::Lmin $::blobulator::guiError
+} -cleanup {guiReset} -result {{1 4} 1 6 {}}
+test gui-1.15 {a modal owner's busy cursor restores after errors} -body {
+    toplevel .guiOwner
+    set cursor [.guiOwner cget -cursor]
+    ::blobulator::queueGUIAction Working {error {test failure}} .guiOwner
+    set busy [.guiOwner cget -cursor]
+    guiDrain
+    set restored [expr {[.guiOwner cget -cursor] eq $cursor}]
+    destroy .guiOwner
+    list $busy $restored $::blobulator::guiBusy
+} -cleanup {guiReset} -result {watch 1 0}
+test gui-1.16 {raising an existing window preserves algorithm state and unfinished text} -setup {
+    set savedFrames $::blobulator::framesTotal
+} -body {
+    set ::blobulator::framesTotal 99
+    .blob.e_Hydrophobicity: delete 0 end
+    .blob.e_Hydrophobicity: insert 0 unfinished
+    source [file join $pluginDir Blob_GUI.tcl]
+    list $::blobulator::framesTotal [.blob.e_Hydrophobicity: get] [expr {$::blobulator::H == .4}]
+} -cleanup {set ::blobulator::framesTotal $savedFrames;guiReset} -result {99 unfinished 1}
+test gui-1.17 {closing the main window also closes its modal and releases its grab} -body {
+    .blob.files.load invoke
+    guiDrain
+    ::blobulator::closeGUI
+    update
+    list [winfo exists .blob] [winfo exists .blobLoad] [grab current]
+} -cleanup {guiReset} -result {0 0 {}}
+test gui-1.18 {an orphaned dialog cannot leave the dispatcher busy} -body {
+    toplevel .guiOwner
+    destroy .blob
+    set accepted [::blobulator::queueGUIAction Working {incr ::guiCount} .guiOwner]
+    destroy .guiOwner
+    list $accepted $::blobulator::guiBusy $::guiCount
+} -cleanup {guiReset} -result {0 0 0}
+set failed $::tcltest::numTests(Failed)
+puts "BLOB_GUI_ACTIONS_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
+rename tk_messageBox {};rename guiActualMessageBox tk_messageBox
+::tcltest::cleanupTests
+flush stdout
+if {[llength [info commands vmdinfo]]} {interp create guiExit;interp eval guiExit [list exit [expr {$failed>0}]]} else {destroy .;exit [expr {$failed>0}]}
+}
