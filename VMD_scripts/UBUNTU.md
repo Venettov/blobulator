@@ -20,7 +20,7 @@ For the graphical workflow, run `Open_Blobulator.sh` once. It opens VMD with Blo
 
 ## What has actually been tested
 
-Initial audit: 6 November 2026. The launcher and protein-loading additions were checked on 7 November 2026. Results are separated by environment.
+Initial audit: 6 November 2026. The launcher and protein-loading additions were checked on 7 November 2026. Full Linux VMD verification followed on 8 November 2026 in the Ubuntu VM described below. Results are separated by environment.
 
 | Environment | Checks | Result |
 | --- | --- | --- |
@@ -33,9 +33,12 @@ Initial audit: 6 November 2026. The launcher and protein-loading additions were 
 | macOS ARM64, GUI responsiveness update, 7 November | 65 molecular/export regressions, 19 GUI dispatch/input/lifecycle regressions, both widget smoke scripts, 12 startup tests and 71 native mouse/keyboard checks across the controls and native dialogs | All passed; CSV/PDF saved, a three-frame MP4 fully decoded at 8 FPS, rendering cancellation left no partial movie |
 | macOS ARM64, Help menu update, 7 November | 12 Help checks, 19 GUI regressions, both widget smoke scripts and 16 smoothing regressions; native Help menu, tabs, contact/link actions and keyboard shortcuts alongside the ubiquitin trajectory | All passed; native contact/browser destinations were intercepted during QA; no messages sent or external pages opened |
 | Ubuntu 24.04.5 ARM64, 7 November | Repeat 8 portable helpers, 7 menu/startup-file tests and both Tk checks, now including the protein-loading form | All passed; Tk widgets use a simulated VMD context |
-| Ubuntu with Linux VMD | Full molecular rendering, actual representation smoothing, camera/state restoration and native desktop save dialogs | **Pending**; no authorized Linux VMD installation was available for this audit |
+| Ubuntu 24.04.5 LTS x86_64, UTM 5.0.8 emulation on Apple M5 Max; 6 GiB RAM, 2 vCPUs, growing 32 GiB QCOW2 disk; Linux VMD 1.9.4a57 with Tcl/Tk 8.5.6; system Tcl/Tk 8.6.14 and FFmpeg 6.1.1 | Full `run_ubuntu_checks.sh` from another working directory: portable helpers, startup/menu, GUI actions, Help, smoothing, display updates, loading, PDF/CSV and movie integration; both system-Tk widget smoke scripts | **127 tests passed, 0 failed, 0 skipped**, plus both widget smoke scripts |
+| Same Ubuntu x86_64 VM, actual Linux VMD | Four supplied static PDBs (1FQY, 1LDA, 1J4N, 1RC2) and the separate 98-frame AdK PSF/DCD: loading, blobulation, smoothing 0/3, coordinates/annotations, redraw retention, CSV/PDF and video configuration | **85 assertions passed** across five inputs; AdK HSD residues 126, 134 and 172 remain unassigned by the inherited filter |
+| Same Ubuntu VM, XFCE desktop and llvmpipe software OpenGL | Actual Extensions > Analysis > Blobulator opening; PDB loading, bundled ubiquitin, Help topics and contact text, Blobulate with Help open/closed, GUI smoothing 0/1/3/5; native CSV/PDF/MP4 dialogs | Passed using guest mouse/keyboard automation over SSH. Saved a 76-row/16-column CSV, one-page PDF and fully decoded H.264 MP4 with 10 frames at 5 FPS (trajectory 0–99, stride 10); view, frame and stored data checks passed |
+| Native Ubuntu lab workstation and its graphics driver | Hardware rendering/performance and long-session physical mouse/keyboard acceptance | **Pending**; VM results do not establish performance or input reliability on every workstation |
 
-The helper tests create synthetic image data; they do not replace VMD integration tests. Xvfb widget checks also do not establish behavior under the lab's desktop window manager or graphics driver. No blanket guarantee is made for every Ubuntu or VMD release.
+The helper tests create synthetic image data; they do not replace VMD integration tests. The 8 November VM also ran the real VMD integration suites and desktop workflow. Its CPU emulation and software graphics differ from a native lab workstation. Early UTM-injected clicks were inconsistent; the completed desktop checks used mouse/keyboard events inside the guest over SSH. Automated checks do not establish long-session physical-click reliability. No blanket guarantee is made for every Ubuntu or VMD release.
 
 ## Repeat the checks on the Ubuntu workstation
 
@@ -46,7 +49,7 @@ sudo apt install tcl tk xvfb xauth poppler-utils
 sh /path/to/blobulator/VMD_scripts/tests/run_ubuntu_checks.sh
 ```
 
-The runner can be invoked from any working directory. It also runs the startup-file tests and loading integration suite. It includes both widget smoke scripts plus `gui_actions.test`, which checks deferred actions, busy-state restoration, editable threshold drafts, cancellation and window lifecycle. `help.test` checks guide navigation, contacts, link routing and Help window lifecycle. `display_updates.test` checks palette colors, avoiding redundant color writes and restoring rendering state after errors. The responsiveness and Help additions use standard Tcl/Tk and VMD commands; their new checks have been run on this Mac, and still need repeating on the Ubuntu workstation. Set `BLOBULATOR_VMD_EXECUTABLE` if `vmd` is not on `PATH`, and optionally provide a log directory as its argument. It fails if a suite fails, skips required checks, omits its result marker, times out, or Linux VMD is missing. It does not download or install VMD.
+The runner can be invoked from any working directory. Its `vmd_test_driver.tcl` explicitly sources each integration suite: VMD's `-e` reader does not set `info script`, which otherwise breaks path restoration in tests that change directory. It also runs the startup-file tests and loading integration suite. It includes both widget smoke scripts plus `gui_actions.test`, which checks deferred actions, busy-state restoration, editable threshold drafts, cancellation and window lifecycle. `help.test` checks guide navigation, contacts, link routing and Help window lifecycle. `display_updates.test` checks palette colors, avoiding redundant color writes and restoring rendering state after errors. These checks passed in the Ubuntu VM; native workstation acceptance remains separate. Set `BLOBULATOR_VMD_EXECUTABLE` if `vmd` is not on `PATH`, and optionally provide a log directory as its argument. It fails if a suite fails, skips required checks, omits its result marker, times out, or Linux VMD is missing. It does not download or install VMD.
 
 To check only the portable helpers and Tk widgets, explicitly use:
 

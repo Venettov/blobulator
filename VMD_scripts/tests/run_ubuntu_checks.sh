@@ -38,9 +38,16 @@ if ! command -v "$vmd_executable" >/dev/null 2>&1; then
     printf '%s\n' 'Linux VMD is required. Install it or set BLOBULATOR_VMD_EXECUTABLE.' >&2
     exit 2
 fi
-run_check smoothing BLOB_SMOOTHING_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -eofexit -e "$script_dir/trajectory_smoothing.test"
-run_check display BLOB_DISPLAY_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/display_updates.test"
-run_check loader BLOB_LOADER_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/blob_loader.test"
-run_check exports BLOB_EXPORT_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/blob_exports.test"
-run_check video BLOB_VIDEO_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/blob_video.test"
+run_vmd_check() {
+    name=$1
+    marker=$2
+    suite=$3
+    run_check "$name" "$marker" env BLOBULATOR_TEST_FILE="$script_dir/$suite" \
+        timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/vmd_test_driver.tcl"
+}
+run_vmd_check smoothing BLOB_SMOOTHING_TEST_RESULT trajectory_smoothing.test
+run_vmd_check display BLOB_DISPLAY_TEST_RESULT display_updates.test
+run_vmd_check loader BLOB_LOADER_TEST_RESULT blob_loader.test
+run_vmd_check exports BLOB_EXPORT_TEST_RESULT blob_exports.test
+run_vmd_check video BLOB_VIDEO_TEST_RESULT blob_video.test
 printf 'All checks passed without skips. Logs: %s\n' "$log_dir"
