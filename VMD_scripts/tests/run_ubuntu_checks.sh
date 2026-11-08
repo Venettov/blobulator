@@ -39,6 +39,7 @@ if ! command -v "$vmd_executable" >/dev/null 2>&1; then
     exit 2
 fi
 run_check smoothing BLOB_SMOOTHING_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -eofexit -e "$script_dir/trajectory_smoothing.test"
+run_check display BLOB_DISPLAY_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/display_updates.test"
 run_check loader BLOB_LOADER_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/blob_loader.test"
 run_check exports BLOB_EXPORT_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/blob_exports.test"
 run_check video BLOB_VIDEO_TEST_RESULT timeout 180 "$vmd_executable" -dispdev text -e "$script_dir/blob_video.test"

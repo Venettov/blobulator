@@ -136,6 +136,16 @@ proc ::blobulator::applyThresholdSlider {name} {
     redrawGUI
 }
 
+# Batch representation/color changes into one scene update. Nested calls must
+# preserve a caller's paused display, including when VMD rejects an operation.
+proc ::blobulator::withDisplayUpdatesPaused {command} {
+    set previous [expr {[display update status] ? "on" : "off"}]
+    display update off
+    catch {uplevel 1 $command} result options
+    display update $previous
+    return -options $options $result
+}
+
 proc ::blobulator::validateGUIParameters {} {
     variable MolID
     variable Lmin
@@ -159,7 +169,7 @@ proc ::blobulator::blobulateGUI {} {
     applyGUIInputs
     set molid [validateGUIParameters]
     set first [expr {!$isFirstTimeBlobulating}]
-    blobulation
+    withDisplayUpdatesPaused {blobulation}
     # Solvent can dominate the initial camera. Fit the newly created protein
     # representations once, preserving the user's view on subsequent redraws.
     if {$first} {display resetview}
@@ -171,6 +181,6 @@ proc ::blobulator::redrawGUI {} {
     variable isFirstTimeBlobulating
     if {!$isFirstTimeBlobulating} {return 0}
     validateGUIParameters
-    blobulationSlider
+    withDisplayUpdatesPaused {blobulationSlider}
     return 1
 }

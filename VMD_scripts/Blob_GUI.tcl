@@ -704,22 +704,28 @@ proc ::blobulator::tricolor_scale {PointA PointB ColorA ColorB} {
 	#sets the color explicitly at three intermediate color anchors (511, 660, 1000) 
 	#adds a linear gradient between the anchors 
 	set color_start [colorinfo num]
-	display update off
+	::blobulator::withDisplayUpdatesPaused {
+		for {set i $PointA} {$i < $PointB} {incr i} {
 
-	for {set i $PointA} {$i < $PointB} {incr i} {
+			set deltaPoint [expr $PointB - $PointA]
+			set colorList {}
+			foreach pa $ColorA pb $ColorB {
+				set deltaColor [expr $pb - $pa]
 
-		set deltaPoint [expr $PointB - $PointA]
-		set colorList {}
-		foreach pa $ColorA pb $ColorB {
-			set deltaColor [expr $pb - $pa]
+				set color [expr [expr $deltaColor / $deltaPoint] * [expr $i - $PointA] + $pa]
+				lappend colorList $color
+			}
 
-			set color [expr [expr $deltaColor / $deltaPoint] * [expr $i - $PointA] + $pa]
-			lappend colorList $color
+			# The palette is global to VMD: check its actual values so external
+			# edits are repaired, while unchanged redraws avoid 1024 color writes.
+			set index [expr {$i + $color_start}]
+			set changed 0
+			foreach expected $colorList actual [colorinfo rgb $index] {
+				if {abs($expected - $actual) > 0.000001} {set changed 1;break}
+			}
+			if {$changed} {color change rgb $index {*}$colorList}
 		}
-
-		color change rgb [expr $i + $color_start] [lindex $colorList 0] [lindex $colorList 1] [lindex $colorList 2]
 	}
-	display update on
 return
 }
 
@@ -732,11 +738,13 @@ return
 #	ColorA (List): List of color values, start point that increments up to the end point
 # 	ColorB (List): List of color values, end point 
 proc ::blobulator::colorScale {{pointA 0} {pointB 205} {pointC 410} {pointD 615} {pointE 820} {pointF 1024} {colorA "0.0 0.5 0.5"} {colorB "0.4 1.0 1.0"} {colorC "0.0 0.3 0.6"} {colorD "0.4 0.7 1.0"} {colorE "0.0 0.0 0.6"} {colorF "0.2 0.2 1.0"}} {
-	::blobulator::tricolor_scale $pointA $pointB $colorA $colorB
-	::blobulator::tricolor_scale $pointB $pointC $colorB $colorC
-	::blobulator::tricolor_scale $pointC $pointD $colorC $colorD
-	::blobulator::tricolor_scale $pointD $pointE $colorD $colorE
-	::blobulator::tricolor_scale $pointE $pointF $colorE $colorF
+	::blobulator::withDisplayUpdatesPaused {
+		::blobulator::tricolor_scale $pointA $pointB $colorA $colorB
+		::blobulator::tricolor_scale $pointB $pointC $colorB $colorC
+		::blobulator::tricolor_scale $pointC $pointD $colorC $colorD
+		::blobulator::tricolor_scale $pointD $pointE $colorD $colorE
+		::blobulator::tricolor_scale $pointE $pointF $colorE $colorF
+	}
 return
 }
 

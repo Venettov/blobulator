@@ -1,0 +1,107 @@
+# Real VMD checks for palette updates and display-state restoration.
+namespace eval :: {
+package require tcltest 2
+namespace import ::tcltest::test
+::tcltest::configure -verbose {start pass error}
+set scriptDir [file dirname [file dirname [file normalize [info script]]]]
+source [file join $scriptDir Blob_GUI.tcl]
+
+proc rgbNear {actual expected} {
+    foreach a $actual e $expected {
+        if {abs($a-$e) > 0.000001} {return 0}
+    }
+    return 1
+}
+proc paletteWrites {command op} {
+    if {[lrange $command 0 2] eq {color change rgb}} {incr ::paletteWriteCount}
+}
+proc displayEnabled {} {expr {!![display update status]}}
+
+test display-1.1 {nested batches see paused rendering and preserve caller scope} -body {
+    display update on
+    set callerValue 0
+    set seen [::blobulator::withDisplayUpdatesPaused {
+        set callerValue 42
+        ::blobulator::withDisplayUpdatesPaused {displayEnabled}
+    }]
+    list $callerValue $seen [displayEnabled]
+} -result {42 0 1}
+
+test display-1.2 {errors restore rendering and preserve the original Tcl error} -body {
+    display update on
+    set failed [catch {
+        ::blobulator::withDisplayUpdatesPaused {error {test failure} {} {BLOB DISPLAY TEST}}
+    } message options]
+    list $failed $message [dict get $options -errorcode] [displayEnabled]
+} -result {1 {test failure} {BLOB DISPLAY TEST} 1}
+
+test display-1.3 {an already paused scene stays paused after nested errors} -body {
+    display update off
+    catch {
+        ::blobulator::withDisplayUpdatesPaused {
+            ::blobulator::withDisplayUpdatesPaused {error {test failure}}
+        }
+    }
+    displayEnabled
+} -cleanup {display update on} -result 0
+
+test display-2.1 {default palette retains its anchor and intermediate colors} -body {
+    ::blobulator::colorScale
+    set result {}
+    set start [colorinfo num]
+    foreach {offset expected} {
+        0 {0.0 0.5 0.5}
+        205 {0.4 1.0 1.0}
+        410 {0.0 0.3 0.6}
+        615 {0.4 0.7 1.0}
+        820 {0.0 0.0 0.6}
+        922 {0.1 0.1 0.8}
+        1023 {0.1990196078 0.1990196078 0.9980392157}
+    } {
+        lappend result [rgbNear [colorinfo rgb [expr {$start+$offset}]] $expected]
+    }
+    set result
+} -result {1 1 1 1 1 1 1}
+
+test display-2.2 {unchanged palette avoids redundant global color writes} -setup {
+    ::blobulator::colorScale
+    set ::paletteWriteCount 0
+    trace add execution color enter paletteWrites
+} -body {
+    ::blobulator::colorScale
+    set ::paletteWriteCount
+} -cleanup {trace remove execution color enter paletteWrites} -result 0
+
+test display-2.3 {a color edited outside Blobulator is repaired on the next redraw} -body {
+    ::blobulator::colorScale
+    set index [expr {[colorinfo num]+123}]
+    set expected [colorinfo rgb $index]
+    color change rgb $index 1 0 0
+    ::blobulator::colorScale
+    rgbNear [colorinfo rgb $index] $expected
+} -result 1
+
+test display-2.4 {custom gradient respects its range and a caller's paused display} -body {
+    set start [colorinfo num]
+    set outside [colorinfo rgb [expr {$start+4}]]
+    display update off
+    ::blobulator::tricolor_scale 0 4 {0.0 0.0 0.0} {1.0 1.0 1.0}
+    list [rgbNear [colorinfo rgb $start] {0 0 0}] \
+        [rgbNear [colorinfo rgb [expr {$start+1}]] {.25 .25 .25}] \
+        [rgbNear [colorinfo rgb [expr {$start+3}]] {.75 .75 .75}] \
+        [rgbNear [colorinfo rgb [expr {$start+4}]] $outside] [displayEnabled]
+} -cleanup {display update on;::blobulator::colorScale} -result {1 1 1 1 0}
+
+test display-2.5 {a rejected palette change restores the display after failure} -body {
+    display update on
+    set failed [catch {::blobulator::tricolor_scale 0 2 {invalid 0 0} {1 1 1}}]
+    list $failed [displayEnabled]
+} -result {1 1}
+
+set failed $::tcltest::numTests(Failed)
+puts "BLOB_DISPLAY_TEST_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
+::tcltest::cleanupTests
+flush stdout
+interp create displayExit
+interp eval displayExit [list exit [expr {$failed>0}]]
+}

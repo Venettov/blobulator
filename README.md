@@ -149,6 +149,8 @@ Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `b
 
 Click an action once and wait for the loading, blobulating or exporting message to finish. The main controls disable and show a busy cursor during an operation, then restore automatically. Movie cancellation stays available in the export window. Blobulator fits the camera after the first successful blobulation so the protein is visible; later parameter changes preserve the view.
 
+Parameter updates batch representation and palette changes before rendering. Unchanged palette entries are left alone; colors edited elsewhere in VMD are checked again on the next Blob ID redraw. The previous display-update setting is restored even after an error.
+
 Threshold text fields can be cleared and edited freely. Press Return to apply the entries, or click Blobulate to apply them together. Sliders and Default buttons apply their values immediately. Invalid values produce a message and leave the controls usable. Reopening the window restores applied threshold values and discards unfinished edits.
 
 ### In-app help and contacts
@@ -243,6 +245,8 @@ When coloring by Blob ID, h-blobs will have different colors depending on the us
 
 VMD blobulator can not run its blobulation algorithm on proteins that contain non-standard amino acids.
 
+Intermittent missed clicks and input pauses remain unresolved on the tested macOS 27.0.1 installation with VMD 1.9.4a57 ARM64 and its bundled Tk 8.6.12. The rendering optimization reduces callback time but does not establish that this input issue is fixed. Automated control tests must be followed by physical mouse/keyboard testing on the target VMD installation.
+
 ### Testing trajectory smoothing:
 
 From `VMD_scripts`, run the integration tests in VMD text mode:
@@ -295,3 +299,5 @@ tclsh tests/menu_install.test
 The loading suite covers PDB and PSF/DCD loading, missing coordinates and malformed files, independent molecule targeting, appending frames, preserving existing coordinates/annotations and smoothing, partial-load rollback, and busy guards. The menu tests use disposable startup files and check safe quoting, preservation/backups, idempotence, registration, loading VMD's default startup and opening VMD Main. They also check repair of earlier Blobulator-only startup files and retention of custom window preferences. Neither menu testing nor `--portable-only` modifies your real startup file.
 
 The additional `gui_actions.test` suite checks deferred dispatch, duplicate-click protection, restoration after errors, modal cancellation, closing/reopening, movie-cancel availability and editable threshold drafts. On Linux run `xvfb-run -a tclsh VMD_scripts/tests/gui_actions.test`, or use the Ubuntu runner. Core Tcl procedures remain synchronous for scripts; GUI actions run after their widget command returns.
+
+Run `vmd -dispdev text -e tests/display_updates.test` to check palette colors, avoiding redundant writes, recovery from external palette edits, nested rendering batches and restoration after errors. This real VMD suite is also included in the Ubuntu runner; it does not verify native input delivery.
