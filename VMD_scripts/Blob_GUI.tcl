@@ -10,6 +10,7 @@ source [file join [file dirname [info script]] blob_exports.tcl]
 source [file join [file dirname [info script]] blob_video.tcl]
 source [file join [file dirname [info script]] blob_gui_actions.tcl]
 source [file join [file dirname [info script]] blob_loader.tcl]
+source [file join [file dirname [info script]] blob_help.tcl]
 
 namespace eval ::blobulator {
 	# Widths,Heights,Rows and Columns
@@ -91,6 +92,9 @@ proc ::blobulator::GUI {} {
 	pack [button $::blobulator::blobs.files.load -text "Load protein..." -command {::blobulator::queueGUIAction {Opening protein loader...} ::blobulator::proteinLoadDialog}] -side left -padx 5 -pady 6
 	pack [button $::blobulator::blobs.files.trajectory -text "Add trajectory..." -command {::blobulator::queueGUIAction {Loading trajectory...} ::blobulator::addTrajectoryFromGUI}] -side left -padx 5 -pady 6
 	pack [button $::blobulator::blobs.files.demo -text "Load ubiquitin demo" -command {::blobulator::queueGUIAction {Loading ubiquitin...} ::blobulator::loadUbiquitinExample}] -side left -padx 5 -pady 6
+	::blobulator::createHelpMenu $::blobulator::blobs.files.help
+	pack $::blobulator::blobs.files.help -side left -padx 5 -pady 6
+	bind $::blobulator::blobs <F1> {after 0 {::blobulator::showHelp gettingStarted}; break}
 	grid $::blobulator::blobs.files -row 0 -column 0 -columnspan 3
 	grid [label $::blobulator::blobs.loadStatus -textvariable ::blobulator::loadStatus -wraplength 600 -justify left] -row 1 -column 0 -columnspan 3 -sticky w -padx 5
 	grid [label $::blobulator::blobs.1_MolID -text "Mol ID:" ] -row 2 -column 0  -rowspan 2 -pady 2
@@ -683,7 +687,7 @@ return
 #	Program the destroys the GUI window
 #
 proc ::blobulator::blobQuit {} {
-	destroy .blob
+	::blobulator::closeGUI
 return
 }
 

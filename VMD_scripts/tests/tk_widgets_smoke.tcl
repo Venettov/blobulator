@@ -14,7 +14,7 @@ proc assert {condition message} {
 set result [catch {
     source [file join $pluginDir Blob_GUI.tcl]
     update
-    foreach widget {.blob.files.load .blob.files.trajectory .blob.files.demo .blob.smoothing .blob.applySmoothing .blob.exports.pdf .blob.exports.csv .blob.exports.video} {
+    foreach widget {.blob.files.load .blob.files.trajectory .blob.files.demo .blob.files.help .blob.smoothing .blob.applySmoothing .blob.exports.pdf .blob.exports.csv .blob.exports.video} {
         assert {[winfo ismapped $widget]} "Control is not mapped: $widget"
     }
     .blob.files.load invoke

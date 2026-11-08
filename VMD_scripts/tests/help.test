@@ -1,0 +1,156 @@
+# Help behavior under graphical VMD, or xvfb-run tclsh on Linux.
+# Browser, message-box and clipboard boundaries are stubbed so tests never
+# open external sites, contact anyone or change the user's system clipboard.
+namespace eval :: {
+package require Tk 8.5
+package require tcltest 2
+namespace import ::tcltest::test
+::tcltest::configure -verbose {start pass error}
+wm withdraw .
+set pluginDir [file dirname [file dirname [file normalize [info script]]]]
+if {![llength [info commands atomselect]]} {
+    proc atomselect {args} {if {[lindex $args 0] eq "macro"} {return};error "No molecule in widget-only tests"}
+}
+source [file join $pluginDir Blob_GUI.tcl]
+update
+if {[llength [info commands vmd_open_url]]} {rename vmd_open_url helpActualOpenURL}
+proc vmd_open_url {url} {lappend ::helpOpenedURLs $url}
+rename tk_messageBox helpActualMessageBox
+proc tk_messageBox {args} {set ::helpMessage $args;return ok}
+rename clipboard helpActualClipboard
+proc clipboard {operation args} {
+    switch -- $operation {
+        clear {set ::helpClipboard ""}
+        append {append ::helpClipboard [lindex $args end]}
+        default {error "Unexpected clipboard operation"}
+    }
+}
+proc helpReset {} {
+    if {[winfo exists .helpModal]} {destroy .helpModal}
+    if {$::blobulator::guiTimer ne ""} {after cancel $::blobulator::guiTimer}
+    ::blobulator::finishGUIAction
+    if {[winfo exists .blobHelp]} {destroy .blobHelp}
+    if {![winfo exists .blob]} {source [file join $::pluginDir Blob_GUI.tcl]}
+    set ::helpOpenedURLs {}
+    set ::helpMessage {}
+    update
+}
+helpReset
+test help-1.1 {each menu item opens its topic in the same nonmodal help window} -body {
+    set selected {}
+    foreach index {0 1 2 3 4 6} {
+        .blob.files.help.menu invoke $index
+        update
+        lappend selected [.blobHelp.tabs select]
+        if {[grab current] ne ""} {error "Help acquired a modal grab"}
+    }
+    list $selected [llength [lsearch -all -exact [winfo children .] .blobHelp]]
+} -cleanup {helpReset} -result {{.blobHelp.tabs.gettingStarted .blobHelp.tabs.controls .blobHelp.tabs.smoothing .blobHelp.tabs.exports .blobHelp.tabs.troubleshooting .blobHelp.tabs.about} 1}
+test help-1.2 {opening and navigating help preserves drafts and applied settings} -body {
+    set ::blobulator::HInput unfinished
+    set ::blobulator::LminInput ""
+    set ::blobulator::smoothingWindow editing
+    set before [list $::blobulator::MolID $::blobulator::select $::blobulator::H $::blobulator::Lmin $::blobulator::trajectorySmoothing]
+    ::blobulator::showHelp smoothing
+    ::blobulator::showHelp controls
+    ::blobulator::closeHelp
+    list [expr {$before eq [list $::blobulator::MolID $::blobulator::select $::blobulator::H $::blobulator::Lmin $::blobulator::trajectorySmoothing]}] \
+        $::blobulator::HInput $::blobulator::LminInput $::blobulator::smoothingWindow
+} -cleanup {helpReset} -result {1 unfinished {} editing}
+test help-1.3 {Close and Escape close help while leaving the main GUI usable} -body {
+    ::blobulator::showHelp
+    update
+    .blobHelp.close invoke
+    set closed [expr {![winfo exists .blobHelp] && [winfo exists .blob]}]
+    ::blobulator::showHelp about
+    update
+    # Generated key events need an explicit keyboard focus under Aqua.
+    focus -force .blobHelp.tabs
+    update
+    event generate .blobHelp.tabs <Escape>
+    update
+    list $closed [winfo exists .blobHelp] [.blob.blobulate cget -state]
+} -cleanup {helpReset} -result {1 0 normal}
+test help-1.4 {help does not replace a loader or export modal grab} -body {
+    toplevel .helpModal
+    grab set .helpModal
+    ::blobulator::showHelp
+    list [grab current] [winfo exists .blobHelp]
+} -cleanup {helpReset} -result {.helpModal 0}
+test help-1.5 {busy actions disable Help and restore it; an open guide remains readable} -body {
+    ::blobulator::showHelp exports
+    ::blobulator::queueGUIAction Working {set ::helpWorkDone 1}
+    set states [list [.blob.files.help cget -state] [.blobHelp.close cget -state] [.blobHelp.tabs.exports.text cget -state]]
+    update
+    list $states [.blob.files.help cget -state] $::helpWorkDone
+} -cleanup {helpReset} -result {{disabled normal disabled} normal 1}
+test help-1.6 {closing the main GUI cleans up help and pending menu opens stay closed} -body {
+    ::blobulator::showHelp
+    .blob.files.help.menu invoke 6
+    ::blobulator::closeGUI
+    update
+    set closed [list [winfo exists .blob] [winfo exists .blobHelp]]
+    source [file join $::pluginDir Blob_GUI.tcl]
+    .blob.files.help.menu invoke 6
+    update
+    list $closed [.blobHelp.tabs select]
+} -cleanup {helpReset} -result {{0 0} .blobHelp.tabs.about}
+test help-1.7 {all project buttons pass the official URLs to VMD's browser launcher} -body {
+    ::blobulator::showHelp about
+    foreach key {website lab source issues publication} {.blobHelp.tabs.about.links.$key invoke;update}
+    set ::helpOpenedURLs
+} -cleanup {helpReset} -result {https://www.blobulator.branniganlab.org/ https://branniganlab.org/ https://github.com/BranniganLab/blobulator https://github.com/BranniganLab/blobulator/issues https://doi.org/10.1021/acs.jcim.5c01585}
+test help-1.8 {both contact buttons copy the listed email and give visible feedback} -body {
+    ::blobulator::showHelp about
+    set results {}
+    foreach key {grace connor} {
+        .blobHelp.tabs.about.contacts.$key invoke
+        lappend results $::helpClipboard [expr {[string first $::helpClipboard [.blobHelp.status cget -text]] >= 0}]
+    }
+    list $results $::helpOpenedURLs
+} -cleanup {helpReset} -result {{grace.brannigan@rutgers.edu 1 connor.pitman@rutgers.edu 1} {}}
+test help-1.9 {a failed browser launch reports the usable URL and permits more help navigation} -body {
+    rename vmd_open_url helpSuccessfulOpenURL
+    proc vmd_open_url {url} {error {test browser unavailable}}
+    ::blobulator::showHelp about
+    .blobHelp.tabs.about.links.website invoke
+    update
+    set message [expr {[string first https://www.blobulator.branniganlab.org/ $::helpMessage] >= 0}]
+    ::blobulator::showHelp gettingStarted
+    list $message [.blobHelp.tabs select]
+} -cleanup {rename vmd_open_url {};rename helpSuccessfulOpenURL vmd_open_url;helpReset} -result {1 .blobHelp.tabs.gettingStarted}
+test help-1.10 {unknown link identifiers cannot launch arbitrary URLs} -body {
+    list [catch {::blobulator::openHelpLink https://example.com/}] $::helpOpenedURLs
+} -cleanup {helpReset} -result {1 {}}
+test help-1.11 {F1 opens readable contact details and credits without external calls} -body {
+    focus -force .blob.blobulate
+    update
+    event generate .blob.blobulate <F1>
+    update
+    set first [.blobHelp.tabs select]
+    ::blobulator::showHelp about
+    update
+    set content [.blobHelp.tabs.about.text get 1.0 end]
+    list $first [expr {[string first grace.brannigan@rutgers.edu $content] >= 0}] \
+        [expr {[string first connor.pitman@rutgers.edu $content] >= 0}] \
+        [expr {[string first {awaiting upstream review} $content] >= 0}] $::helpOpenedURLs
+} -cleanup {helpReset} -result {.blobHelp.tabs.gettingStarted 1 1 1 {}}
+test help-1.12 {help tabs, contact actions and Close remain visible at the minimum size} -body {
+    ::blobulator::showHelp about
+    wm geometry .blobHelp 660x470
+    update
+    set visible {}
+    foreach w {.blobHelp.close .blobHelp.status .blobHelp.tabs.about.links.publication .blobHelp.tabs.about.contacts.connor} {
+        lappend visible [expr {[winfo ismapped $w] && \
+            [winfo rooty $w]+[winfo height $w] <= [winfo rooty .blobHelp]+[winfo height .blobHelp] && \
+            [winfo rootx $w]+[winfo width $w] <= [winfo rootx .blobHelp]+[winfo width .blobHelp]}]
+    }
+    set visible
+} -cleanup {helpReset} -result {1 1 1 1}
+set failed $::tcltest::numTests(Failed)
+set skipped $::tcltest::numTests(Skipped)
+puts "BLOB_HELP_TEST_RESULT total=$::tcltest::numTests(Total) skipped=$skipped failed=$failed"
+::tcltest::cleanupTests
+destroy .
+exit [expr {$failed != 0 || $skipped != 0}]
+}

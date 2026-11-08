@@ -137,7 +137,7 @@ This plugin allows users to blobulate and view blobs on a protein structure in V
 
 ## Installation guide:
 
-Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `blobulation.tcl`, `normalized_hydropathyscales.tcl`, `blob_exports.tcl`, `blob_video.tcl`, `blob_loader.tcl` and `blob_gui_actions.tcl`. The menu/launcher also uses `blobulator_plugin.tcl`, `pkgIndex.tcl` and `start_blobulator.tcl`.
+Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `blobulation.tcl`, `normalized_hydropathyscales.tcl`, `blob_exports.tcl`, `blob_video.tcl`, `blob_loader.tcl`, `blob_gui_actions.tcl` and `blob_help.tcl`. The menu/launcher also uses `blobulator_plugin.tcl`, `pkgIndex.tcl` and `start_blobulator.tcl`.
 
 ## Quickstart:
 
@@ -150,6 +150,12 @@ Keep the complete `VMD_scripts` folder together. The GUI uses `Blob_GUI.tcl`, `b
 Click an action once and wait for the loading, blobulating or exporting message to finish. The main controls disable and show a busy cursor during an operation, then restore automatically. Movie cancellation stays available in the export window. Blobulator fits the camera after the first successful blobulation so the protein is visible; later parameter changes preserve the view.
 
 Threshold text fields can be cleared and edited freely. Press Return to apply the entries, or click Blobulate to apply them together. Sliders and Default buttons apply their values immediately. Invalid values produce a message and leave the controls usable. Reopening the window restores applied threshold values and discards unfinished edits.
+
+### In-app help and contacts
+
+Open **Help** in the Blobulator toolbar, or press **F1** in the main window. The guide covers getting started, controls, trajectory smoothing, exports and troubleshooting. It works offline, can stay open beside the main GUI and does not change the molecule or applied settings. Close or Escape closes only the guide.
+
+**Help > About & Contact...** credits Dr. Grace Brannigan, the Brannigan Lab at Rutgers University-Camden and the original contributors. It provides official webtool, lab, source code, issue tracker and publication links, plus buttons to copy the contacts listed by the [official Blobulator webtool](https://www.blobulator.branniganlab.org/): `grace.brannigan@rutgers.edu` and `connor.pitman@rutgers.edu`. Links open through VMD's configured browser; copying an address does not send a message. This local mini-project's additions are identified separately as development work awaiting upstream review.
 
 **Add trajectory...** appends matching coordinate frames to the selected molecule. Atom count and order must match the structure. Existing frames, the current frame and representation settings remain intact. If the molecule is already blobulated, new protein frames inherit its sequence-based `user`/`user2` assignments. A failed append rolls back newly added frames. Loading a new protein creates a separate molecule and preserves existing molecules.
 
@@ -246,6 +252,8 @@ vmd -dispdev text -eofexit -e tests/trajectory_smoothing.test
 ```
 
 The tests generate a disposable five-frame peptide trajectory and check smoothing, coordinate preservation, all representation builders, parameter changes, clearing, molecule selection, input validation, and reopening the plugin. The test process exits with a nonzero status on failure. A graphical VMD session is also needed to check the controls and playback visually.
+
+The offline guide has a focused GUI suite: run `vmd -e tests/help.test` from `VMD_scripts`, or `xvfb-run -a tclsh tests/help.test` with system Tk on Linux. It checks menu and F1 navigation, nonmodal behavior, preserving settings, busy-state handling, closing/reopening, layout at the minimum size, contact-copy actions and official link routing. Browser, clipboard and message-box boundaries are stubbed in this suite.
 
 ### Testing exports
 

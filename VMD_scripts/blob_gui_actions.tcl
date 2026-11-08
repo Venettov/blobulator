@@ -11,7 +11,7 @@ namespace eval ::blobulator {
 proc ::blobulator::guiControls {parent} {
     set controls {}
     foreach w [winfo children $parent] {
-        if {[winfo class $w] in {Button Checkbutton Entry Spinbox Scale TCombobox}} {lappend controls $w}
+        if {[winfo class $w] in {Button Checkbutton Entry Spinbox Scale TCombobox Menubutton TMenubutton}} {lappend controls $w}
         lappend controls {*}[guiControls $w]
     }
     return $controls
@@ -107,7 +107,7 @@ proc ::blobulator::closeGUI {} {
     variable loadStatus
     if {$guiRunning} {set loadStatus "Wait for the current operation, or cancel in its export window.";return}
     if {$guiTimer ne ""} {after cancel $guiTimer;set loadStatus "Cancelled.";finishGUIAction}
-    foreach child {.blobLoad .blobVideo} {if {[winfo exists $child]} {destroy $child}}
+    foreach child {.blobLoad .blobVideo .blobHelp} {if {[winfo exists $child]} {destroy $child}}
     destroy $blobs
 }
 

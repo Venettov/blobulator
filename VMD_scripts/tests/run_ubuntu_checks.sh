@@ -28,6 +28,7 @@ run_check menu BLOB_MENU_TEST_RESULT tclsh "$script_dir/menu_install.test"
 run_check tk BLOB_TK_SMOKE_RESULT xvfb-run -a tclsh "$script_dir/tk_widgets_smoke.tcl"
 run_check tk_smoothing BLOB_SMOOTHING_TK_RESULT xvfb-run -a tclsh "$script_dir/tk_smoothing_smoke.tcl"
 run_check gui_actions BLOB_GUI_ACTIONS_RESULT xvfb-run -a tclsh "$script_dir/gui_actions.test"
+run_check help BLOB_HELP_TEST_RESULT xvfb-run -a tclsh "$script_dir/help.test"
 if [ "$portable_only" -eq 1 ]; then
     printf '%s\n' 'Portable helpers and Tk checked. VMD integration was NOT run.'
     exit 0
