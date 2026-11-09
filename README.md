@@ -3,7 +3,33 @@ _Looking for the web interface? Find it here:_ https://www.blobulator.branniganl
 
 This tool identifies contiguous stretches of hydrophobic residues within a protein sequence. Any sequence of contiguous hydrophobic residues that is at least as long as the minimum blob length is considered an hydrophobic or h "blob". Any remaining segments that are at least as long as the minimum length are considered polar or p "blobs," while those that are shorter than the minimum blob length are considered separator or "s" residues.  Separator residues are very short stretches of non-hydrophobic residues that may be found between two h blobs.
 
+## Install the VMD extension on Ubuntu
+
+Use your existing graphical Linux VMD installation. If you need VMD, get a build for your machine from the [official VMD download page](https://www.ks.uiuc.edu/Development/Download/download.cgi?PackageName=VMD). The VMD extension runs through Tcl/Tk and uses no Python or Conda setup.
+
+1. Open Terminal on your Ubuntu desktop and clone the feature branch.
+
+   ```sh
+   git clone --single-branch --branch blobulator-trajectory-smoothing \
+     https://github.com/Venettov/blobulator.git blobulator-vmd-review
+   cd blobulator-vmd-review
+   ```
+
+2. Launch Blobulator from the checkout root.
+
+   ```sh
+   sh ./Open_Blobulator.sh
+   ```
+
+   The launcher opens a new VMD session and registers **Extensions → Analysis → Blobulator** for future sessions. For a one-session test, run `BLOBULATOR_INSTALL_MENU=0 sh ./Open_Blobulator.sh`. For a custom VMD installation, set `BLOBULATOR_VMD_EXECUTABLE` to the full path to its launcher.
+
+3. Click **Load ubiquitin demo** and wait for VMD Main to show 100 frames, then click **Blobulate**. Both demo files come with the checkout. To try trajectory smoothing, enter `3`, click **Apply to all blobs**, and play the trajectory. Apply `0` to compare the same frames.
+
+For MP4 export, install FFmpeg with `sudo apt install ffmpeg` if it is missing. See the [Ubuntu guide](VMD_scripts/UBUNTU.md) for the tested environment and automated checks.
+
 ## Running locally:
+
+Use the Python setup below for local scripting and the web interface.
 
 ### Installation guide:
 
@@ -136,6 +162,8 @@ This plugin allows users to blobulate and view blobs on a protein structure in V
 ```VMD```
 
 ## Installation guide:
+
+For the Ubuntu launcher and demo, follow [Install the VMD extension on Ubuntu](#install-the-vmd-extension-on-ubuntu).
 
 Keep the complete `VMD_scripts` folder together, including its `demo/ubiquitin` subfolder. The GUI uses `Blob_GUI.tcl`, `blobulation.tcl`, `normalized_hydropathyscales.tcl`, `blob_exports.tcl`, `blob_video.tcl`, `blob_loader.tcl`, `blob_gui_actions.tcl` and `blob_help.tcl`. The menu/launcher also uses `blobulator_plugin.tcl`, `pkgIndex.tcl` and `start_blobulator.tcl`.
 
@@ -285,7 +313,7 @@ The [Ubuntu verification runner](VMD_scripts/tests/run_ubuntu_checks.sh) runs th
 xvfb-run -a tclsh /path/to/blobulator/VMD_scripts/tests/tk_smoothing_smoke.tcl
 ```
 
-These widget checks simulate VMD context. See [Ubuntu compatibility](VMD_scripts/UBUNTU.md) for dependencies, tested versions and the pending integration checks inside Linux VMD.
+These widget checks simulate VMD context. See [Ubuntu compatibility](VMD_scripts/UBUNTU.md) for dependencies, tested versions and the Linux VMD integration results.
 
 ### Testing file loading and menu setup
 
