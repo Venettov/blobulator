@@ -40,6 +40,12 @@ Initial audit: 6 November 2026. The launcher and protein-loading additions were 
 
 The helper tests create synthetic image data; they do not replace VMD integration tests. The 8 November VM also ran the real VMD integration suites and desktop workflow. Its CPU emulation and software graphics differ from a native lab workstation. Early UTM-injected clicks were inconsistent; the completed desktop checks used mouse/keyboard events inside the guest over SSH. Automated checks do not establish long-session physical-click reliability. No blanket guarantee is made for every Ubuntu or VMD release.
 
+### VMD 2.0.0b1 verification
+
+On the Ubuntu 24.04.5 LTS x86-64 VM, VMD 2.0.0b1 with Tcl/Tk 8.6.17 opened Blobulator through both `Open_Blobulator.sh` and `source` in VMD's Tk Console. The graphical check loaded all 100 bundled ubiquitin frames, blobulated the protein, and verified smoothing values 0 and 3 on the blob representations.
+
+The beta's text-mode integration suite stopped when VMD crashed at `mol delete` during smoothing test cleanup. A standalone reproduction using VMD commands and the test peptide fixture crashed on molecule deletion as well. The full suite passed on VMD 1.9.4a57 in the same Ubuntu VM.
+
 ## Repeat the checks on the Ubuntu workstation
 
 Install test-only tools, in addition to Linux VMD and FFmpeg:

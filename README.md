@@ -23,6 +23,8 @@ Use your existing graphical Linux VMD installation. If you need VMD, get a build
 
    The launcher opens a new VMD session and registers **Extensions → Analysis → Blobulator** for future sessions. For a one-session test, run `BLOBULATOR_INSTALL_MENU=0 sh ./Open_Blobulator.sh`. For a custom VMD installation, set `BLOBULATOR_VMD_EXECUTABLE` to the full path to its launcher.
 
+   Run the launcher in Ubuntu Terminal. For [manual loading](#manual-loading), enter the Tcl `source` command in **VMD Main → Extensions → Tk Console**.
+
 3. Click **Load ubiquitin demo** and wait for VMD Main to show 100 frames, then click **Blobulate**. Both demo files come with the checkout. To try trajectory smoothing, enter `3`, click **Apply to all blobs**, and play the trajectory. Apply `0` to compare the same frames.
 
 For MP4 export, install FFmpeg with `sudo apt install ffmpeg` if it is missing. See the [Ubuntu guide](VMD_scripts/UBUNTU.md) for the tested environment and automated checks.
@@ -195,7 +197,13 @@ When Blobulator creates the user startup file, it also loads VMD's standard star
 
 ### Manual loading
 
-The Tk Console method remains available: load your protein, then source `Blob_GUI.tcl` by absolute path, for example `source {/home/yourname/blobulator/VMD_scripts/Blob_GUI.tcl}`. The scripts load their helpers relative to their own folder. For Ubuntu dependencies, verification commands and the limits of current Linux testing, see [Ubuntu compatibility](VMD_scripts/UBUNTU.md).
+In a graphical VMD session, open **VMD Main → Extensions → Tk Console**. Enter the following Tcl command there, using the absolute path to your checkout.
+
+```tcl
+source {/home/yourname/blobulator/VMD_scripts/Blob_GUI.tcl}
+```
+
+If Ubuntu Terminal reports `dict: command not found` or a Bash syntax error, it is interpreting the Tcl script as shell commands. Return to the VMD Tk Console for `source` or run `sh ./Open_Blobulator.sh` from the checkout root in Terminal.
 
 ## Optional Settings:
 * Select the residues you wish to blobulate (defaults to "all").

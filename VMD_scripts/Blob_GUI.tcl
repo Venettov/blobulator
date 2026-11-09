@@ -1,3 +1,10 @@
+# Tcl reads this continued comment as a single line. Shells print the launch instructions. \
+printf '%s\n' \
+    'Blob_GUI.tcl runs inside VMD.' \
+    'Run this command from the repository root in Terminal.' \
+    '  sh ./Open_Blobulator.sh' \
+    'For manual loading, use VMD Main > Extensions > Tk Console.' >&2; return 1 2>/dev/null || exit 1
+
 if {[llength [info commands winfo]] && [winfo exists .blob]} {
 	wm deiconify $::blobulator::blobs
 	if {[llength [info commands ::blobulator::focusGUI]]} {::blobulator::focusGUI} else {raise $::blobulator::blobs}
