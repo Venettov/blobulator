@@ -75,7 +75,8 @@ namespace eval ::blobulator {
 
 	# Reopening restores the applied value and discards any unsubmitted edit.
 	variable smoothingWindow $trajectorySmoothing
-	variable smoothingHint "Frames before and after the current frame. 0 turns smoothing off."
+	variable smoothingInstructions "VMD averages the current frame with nearby frames.\n3 uses up to 3 earlier + 1 current + 3 later frames. 0 turns smoothing off."
+	variable smoothingHint $smoothingInstructions
 	variable HInput $H
 	variable LminInput $Lmin
 	# Stable representation names, indexed by the numeric molecule ID.
@@ -158,7 +159,7 @@ proc ::blobulator::GUI {} {
 	grid [button $::blobulator::blobs.applySmoothing -text "Apply to all blobs" \
 		-command {::blobulator::queueGUIAction {Applying smoothing...} ::blobulator::applyTrajectorySmoothing}] -row 14 -column 2 -pady 2
 	grid [label $::blobulator::blobs.smoothingHelp \
-		-textvariable ::blobulator::smoothingHint] -row 15 -column 0 -columnspan 3 -pady 2
+		-textvariable ::blobulator::smoothingHint -height 2] -row 15 -column 0 -columnspan 3 -pady 2
 	bind $::blobulator::blobs.smoothing <Return> {::blobulator::queueGUIAction {Applying smoothing...} ::blobulator::applyTrajectorySmoothing}
 
 	#Button grids
@@ -235,6 +236,8 @@ proc ::blobulator::applyTrajectorySmoothing {} {
     variable smoothingWindow
     variable trajectorySmoothing
     variable blobs
+    variable smoothingHint
+    variable smoothingInstructions
 
     if {[catch {
         set window [validatedSmoothingWindow $smoothingWindow]
@@ -246,7 +249,7 @@ proc ::blobulator::applyTrajectorySmoothing {} {
     }
     set trajectorySmoothing $window
     set smoothingWindow $window
-    variable smoothingHint "Frames before and after the current frame. 0 turns smoothing off."
+    set smoothingHint $smoothingInstructions
     return 1
 }
 

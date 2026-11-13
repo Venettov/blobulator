@@ -131,13 +131,14 @@ proc ::blobulator::validatedSmoothingWindow {value} {
 
 proc ::blobulator::validateSmoothingEdit {reason proposed} {
     variable smoothingHint
+    variable smoothingInstructions
     # Tk also calls validation when the linked variable is updated by Tcl.
     if {$reason ne "key"} {return 1}
     if {$proposed ne "" && [catch {validatedSmoothingWindow $proposed} message]} {
         set smoothingHint $message
         return 0
     }
-    set smoothingHint "Frames before and after the current frame. 0 turns smoothing off."
+    set smoothingHint $smoothingInstructions
     return 1
 }
 

@@ -188,7 +188,7 @@ test gui-2.1 {smoothing rejects invalid edits immediately and stays editable} -b
     set empty [.blob.smoothing get]
     .blob.smoothing insert 0 08
     list $decimal $letters $empty [::blobulator::validatedSmoothingWindow [.blob.smoothing get]] \
-        [.blob.smoothing cget -validate] [string match {*before and after*} $::blobulator::smoothingHint]
+        [.blob.smoothing cget -validate] [string match {*3 earlier + 1 current + 3 later frames*} $::blobulator::smoothingHint]
 } -cleanup {set ::blobulator::smoothingWindow 0; guiReset} -result {{10 1} {10 1} {} 8 key 1}
 set failed $::tcltest::numTests(Failed)
 puts "BLOB_GUI_ACTIONS_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
