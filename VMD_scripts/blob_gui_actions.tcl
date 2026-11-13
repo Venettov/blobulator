@@ -120,6 +120,27 @@ proc ::blobulator::validateThresholdValues {length cutoff} {
     }
 }
 
+proc ::blobulator::validatedSmoothingWindow {value} {
+    if {[regexp {^[0-9]+$} $value]} {
+        set decimal [string trimleft $value 0]
+        if {$decimal eq ""} {return 0}
+        if {[string is integer -strict $decimal] && $decimal <= 2147483647} {return $decimal}
+    }
+    error "Smoothing must be a whole number from 0 to 2147483647."
+}
+
+proc ::blobulator::validateSmoothingEdit {reason proposed} {
+    variable smoothingHint
+    # Tk also calls validation when the linked variable is updated by Tcl.
+    if {$reason ne "key"} {return 1}
+    if {$proposed ne "" && [catch {validatedSmoothingWindow $proposed} message]} {
+        set smoothingHint $message
+        return 0
+    }
+    set smoothingHint "Frames before and after the current frame. 0 turns smoothing off."
+    return 1
+}
+
 proc ::blobulator::applyGUIInputs {} {
     variable LminInput
     variable HInput
@@ -166,13 +187,14 @@ proc ::blobulator::validateGUIParameters {} {
 proc ::blobulator::blobulateGUI {} {
     variable isFirstTimeBlobulating
     variable loadStatus
+    variable select
     applyGUIInputs
     set molid [validateGUIParameters]
     set first [expr {!$isFirstTimeBlobulating}]
-    withDisplayUpdatesPaused {blobulation}
-    # Solvent can dominate the initial camera. Fit the newly created protein
-    # representations once, preserving the user's view on subsequent redraws.
-    if {$first} {display resetview}
+    withDisplayUpdatesPaused {
+        blobulation
+        if {$first} {fitProteinView $molid "($select) and protein"}
+    }
     set loadStatus "Blobulated molecule $molid ([molinfo $molid get numframes] frames). Ready."
     return 1
 }

@@ -178,6 +178,18 @@ test gui-1.18 {an orphaned dialog cannot leave the dispatcher busy} -body {
     destroy .guiOwner
     list $accepted $::blobulator::guiBusy $::guiCount
 } -cleanup {guiReset} -result {0 0 0}
+test gui-2.1 {smoothing rejects invalid edits immediately and stays editable} -body {
+    set ::blobulator::smoothingWindow 10
+    .blob.smoothing insert end .5
+    set decimal [list [.blob.smoothing get] [string match {*whole number*} $::blobulator::smoothingHint]]
+    .blob.smoothing insert end abc
+    set letters [list [.blob.smoothing get] [string match {*whole number*} $::blobulator::smoothingHint]]
+    .blob.smoothing delete 0 end
+    set empty [.blob.smoothing get]
+    .blob.smoothing insert 0 08
+    list $decimal $letters $empty [::blobulator::validatedSmoothingWindow [.blob.smoothing get]] \
+        [.blob.smoothing cget -validate] [string match {*before and after*} $::blobulator::smoothingHint]
+} -cleanup {set ::blobulator::smoothingWindow 0; guiReset} -result {{10 1} {10 1} {} 8 key 1}
 set failed $::tcltest::numTests(Failed)
 puts "BLOB_GUI_ACTIONS_RESULT total=$::tcltest::numTests(Total) passed=$::tcltest::numTests(Passed) skipped=$::tcltest::numTests(Skipped) failed=$failed"
 rename tk_messageBox {};rename guiActualMessageBox tk_messageBox

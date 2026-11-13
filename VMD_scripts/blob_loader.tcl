@@ -28,8 +28,40 @@ proc ::blobulator::loadFileOptions {path} {
         .pdb - .ent {return {type pdb}}
         .psf {return {type psf}}
         .dcd {return {type dcd}}
+        .gro {return {type gro}}
+        .g96 {return {type g96}}
         default {return {}}
     }
+}
+
+proc ::blobulator::appendCoordinateFrames {molid filename} {
+    set before [molinfo $molid get numframes]
+    set fileOptions [loadFileOptions $filename]
+    if {$fileOptions eq {type gro}} {
+        # The GRO header gives the atom count before VMD attempts to read a frame.
+        set channel [open $filename r]
+        set code [catch {
+            gets $channel
+            set count [string trim [gets $channel]]
+        } message options]
+        close $channel
+        if {$code} {return -options $options $message}
+        if {![regexp {^[0-9]+$} $count] || [string trimleft $count 0] eq ""} {
+            error "This GRO file has no valid atom count in its second line."
+        }
+        set count [string trimleft $count 0]
+        set expected [molinfo $molid get numatoms]
+        if {$count ne $expected} {
+            error "This GRO file contains $count atoms, but molecule $molid has $expected. Choose coordinates with the same atoms in the same order."
+        }
+    }
+    # VMD expects the destination molecule ID as the final positional argument.
+    mol addfile $filename {*}$fileOptions waitfor all $molid
+    set after [molinfo $molid get numframes]
+    if {$after <= $before} {
+        error "VMD could not read any new coordinate frames from [file tail $filename]. Check the format and the atom count and order against the selected structure."
+    }
+    return $after
 }
 
 # Create a privately owned molecule first, so failed reads can always remove
@@ -46,10 +78,10 @@ proc ::blobulator::loadProteinFiles {structure {trajectory ""}} {
     set protein ""
     set result [catch {
         set molid [mol new]
-        mol addfile $structure {*}[loadFileOptions $structure] waitfor all molid $molid
+        mol addfile $structure {*}[loadFileOptions $structure] waitfor all $molid
         if {[molinfo $molid get numatoms] == 0} {error "The structure contains no atoms."}
         if {$trajectory ne ""} {
-            mol addfile $trajectory {*}[loadFileOptions $trajectory] waitfor all molid $molid
+            appendCoordinateFrames $molid $trajectory
         }
         if {[molinfo $molid get numframes] == 0} {
             error "This topology has no coordinates. Choose a matching trajectory or coordinate file as well."
@@ -85,9 +117,7 @@ proc ::blobulator::addTrajectoryFile {molid filename} {
             set assignments [atomselect $molid protein frame 0]
             set values [$assignments get {user user2}]
         }
-        mol addfile $filename {*}[loadFileOptions $filename] waitfor all molid $molid
-        set count [molinfo $molid get numframes]
-        if {$count <= $previousFrames} {error "The selected file did not add any coordinate frames."}
+        set count [appendCoordinateFrames $molid $filename]
         if {$assignments ne ""} {
             for {set frame $previousFrames} {$frame < $count} {incr frame} {
                 $assignments frame $frame
@@ -107,13 +137,38 @@ proc ::blobulator::addTrajectoryFile {molid filename} {
     return [expr {$count - $previousFrames}]
 }
 
+proc ::blobulator::fitProteinView {molid selection} {
+    set atoms [atomselect $molid $selection]
+    set code [catch {measure minmax $atoms} bounds options]
+    $atoms delete
+    if {$code} {return -options $options $bounds}
+    lassign $bounds minimum maximum
+    set center [vecscale -0.5 [vecadd $minimum $maximum]]
+    lassign [vecsub $maximum $minimum] dx dy dz
+    # Use the same nominal view extent as VMD's Reset View.
+    set scale [expr {1.5 / max(3.0, $dx, $dy, $dz)}]
+    display resetview
+    set scaleMatrix [list [list $scale 0 0 0] [list 0 $scale 0 0] [list 0 0 $scale 0] {0 0 0 1}]
+    set matrices [list [transoffset $center] $scaleMatrix]
+    foreach molecule [molinfo list] {
+        molinfo $molecule set {center_matrix scale_matrix} $matrices
+    }
+}
+
 proc ::blobulator::loadedProtein {molid} {
     variable MolID $molid
     variable select protein
     variable isFirstTimeBlobulating 0
     variable loadStatus "Loaded [lindex [molinfo $molid get name] 0]: [molinfo $molid get numframes] frames. Click Blobulate."
     mol top $molid
-    display resetview
+    withDisplayUpdatesPaused {
+        mol modselect 0 $molid protein
+        fitProteinView $molid protein
+    }
+}
+
+proc ::blobulator::coordinateFileTypes {} {
+    return {{{Trajectory or coordinates} {.dcd .xtc .trr .nc .pdb .ent .gro .g96}} {{All files} *}}
 }
 
 proc ::blobulator::proteinLoadDialog {} {
@@ -128,13 +183,13 @@ proc ::blobulator::proteinLoadDialog {} {
     wm transient .blobLoad $blobs
     wm resizable .blobLoad 0 0
     wm protocol .blobLoad WM_DELETE_WINDOW ::blobulator::closeProteinLoadDialog
-    foreach {row label variableName} {0 {Structure (PDB or PSF)} loadStructure 1 {Trajectory or coordinates (optional)} loadTrajectory} {
+    foreach {row label variableName} {0 {Structure file} loadStructure 1 {Trajectory or coordinates (optional)} loadTrajectory} {
         grid [label .blobLoad.label$row -text $label] -row $row -column 0 -sticky w -padx 10 -pady 8
         grid [entry .blobLoad.$variableName -textvariable ::blobulator::$variableName -width 40] -row $row -column 1 -padx 6
         .blobLoad.$variableName xview end
         grid [button .blobLoad.browse$row -text "Browse..." -command [list ::blobulator::queueGUIAction {Choosing file...} [list ::blobulator::browseProteinFile $variableName] .blobLoad]] -row $row -column 2 -padx 10
     }
-    grid [label .blobLoad.hint -text "A PSF needs matching coordinates. Trajectory atoms must match the structure and its atom order." -wraplength 660 -justify left] -row 2 -column 0 -columnspan 3 -sticky w -padx 10 -pady 6
+    grid [label .blobLoad.hint -text "Use a VMD-readable structure such as PDB, PSF, GRO or G96. A topology without coordinates needs a matching coordinate file with the same atom count and order." -wraplength 660 -justify left] -row 2 -column 0 -columnspan 3 -sticky w -padx 10 -pady 6
     grid [button .blobLoad.load -text "Load protein" -command {::blobulator::queueGUIAction {Loading protein...} ::blobulator::loadProteinFromGUI .blobLoad}] -row 3 -column 1 -pady 10
     grid [button .blobLoad.cancel -text "Cancel" -command ::blobulator::closeProteinLoadDialog] -row 3 -column 2 -pady 10
     bind .blobLoad <Return> {::blobulator::queueGUIAction {Loading protein...} ::blobulator::loadProteinFromGUI .blobLoad}
@@ -152,10 +207,10 @@ proc ::blobulator::closeProteinLoadDialog {} {
 proc ::blobulator::browseProteinFile {variableName} {
     if {$variableName eq "loadStructure"} {
         set title "Choose a protein structure"
-        set types {{{Protein structure} {.pdb .ent .psf}} {{All files} *}}
+        set types {{{Protein structure} {.pdb .ent .psf .gro .g96}} {{All files} *}}
     } else {
         set title "Choose matching trajectory or coordinates"
-        set types {{{Trajectory or coordinates} {.dcd .xtc .trr .nc .pdb}} {{All files} *}}
+        set types [coordinateFileTypes]
     }
     set filename [tk_getOpenFile -parent .blobLoad -title $title -filetypes $types]
     if {$filename ne ""} {
@@ -199,7 +254,7 @@ proc ::blobulator::addTrajectoryFromGUI {} {
         tk_messageBox -parent $blobs -icon error -type ok -title "Add trajectory" -message "Load or select a protein first."
         return 0
     }
-    set filename [tk_getOpenFile -parent $blobs -title "Add matching trajectory" -filetypes {{{Trajectory or coordinates} {.dcd .xtc .trr .nc .pdb}} {{All files} *}}]
+    set filename [tk_getOpenFile -parent $blobs -title "Add matching trajectory" -filetypes [coordinateFileTypes]]
     if {$filename eq ""} {return 0}
     if {[catch {set count [addTrajectoryFile $MolID $filename]} message]} {
         tk_messageBox -parent $blobs -icon error -type ok -title "Add trajectory" -message $message
@@ -216,6 +271,7 @@ proc ::blobulator::loadUbiquitinExample {} {
     set dataDir [file join $loaderDirectory demo ubiquitin]
     if {[catch {
         set molid [loadProteinFiles [file join $dataDir ubiquitin.psf] [file join $dataDir pulling.dcd]]
+        molinfo $molid set frame 0
         loadedProtein $molid
     } message]} {
         set loadStatus "Unable to load the bundled ubiquitin demo."

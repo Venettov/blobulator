@@ -144,22 +144,27 @@ test smoothing-2.1 {all four builders restore the last applied value} -setup {
     cleanupMolecules
 } -result {3 3 3 3 3}
 
-test smoothing-2.2 {clear forgets old reps and preserves the smoothing preference} -setup {
+test smoothing-2.2 {clear removes all reps only from the selected molecule and retains smoothing} -setup {
     setupBlobs
 } -body {
     set molid $::blobulator::MolID
+    set other [mol new]
+    mol addrep $other
+    mol addrep $molid
+    set frames [molinfo $molid get numframes]
     set ::blobulator::smoothingWindow 2
     ::blobulator::applyTrajectorySmoothing
     ::blobulator::blobClear $molid
     # Slider callbacks must not recreate representations immediately after clear.
     ::blobulator::blobulationSlider
     set cleared [list [molinfo $molid get numreps] \
-        [info exists ::blobulator::blobRepNames($molid)]]
+        [info exists ::blobulator::blobRepNames($molid)] \
+        [molinfo $other get numreps] [expr {[molinfo $molid get numframes] == $frames}]]
     ::blobulator::graphRepUserSelect protein
     list $cleared [smoothingValues $molid]
 } -cleanup {
     cleanupMolecules
-} -result {{0 0} 2}
+} -result {{0 0 1 1} 2}
 
 test smoothing-3.1 {unrelated reps and a different top molecule stay unchanged} -setup {
     setupBlobs

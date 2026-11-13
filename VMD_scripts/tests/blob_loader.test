@@ -22,6 +22,28 @@ $s writepdb $pdb
 $s writepsf $psf
 animate write dcd $dcd beg 0 end 4 waitfor all sel $s $fixture
 $s delete
+# Write two coordinate frames in GRO's fixed-width format, with coordinates in nm.
+set gro [file join $exportDir {protein trajectory.GRO}]
+set badGro [file join $exportDir mismatch.gro]
+set atoms [atomselect $fixture all]
+set channel [open $gro w]
+for {set frame 0} {$frame < 2} {incr frame} {
+    $atoms frame $frame
+    puts $channel "Protein frame $frame"
+    puts $channel [$atoms num]
+    set serial 0
+    foreach row [$atoms get {resid resname name x y z}] {
+        lassign $row resid resname name x y z
+        puts $channel [format {%5d%-5s%5s%5d%8.3f%8.3f%8.3f} \
+            $resid $resname $name [incr serial] [expr {$x/10}] [expr {$y/10}] [expr {$z/10}]]
+    }
+    puts $channel "   3.00000   3.00000   3.00000"
+}
+close $channel
+$atoms delete
+set channel [open $badGro w]
+puts $channel "Mismatched GRO\n47"
+close $channel
 # A self-contained installation with spaces in its path and no neighboring
 # tutorial folder. Copy only runtime scripts and the data shipped with them.
 set standaloneScripts [file join $exportDir {standalone checkout} VMD_scripts]
@@ -146,6 +168,25 @@ test load-2.4 {a structure file adding no frames does not alter an existing mole
 } -body {
     list [catch {::blobulator::addTrajectoryFile $m $psf}] [expr {$before eq [loaderData $m]}]
 } -cleanup {loaderCleanup} -result {1 1}
+test load-2.5 {GRO loads as a structure and appends all matching coordinate frames} -body {
+    set m [::blobulator::loadProteinFiles $gro]
+    set other [::blobulator::loadProteinFiles $psf $dcd]
+    molinfo $m set frame 1
+    set before [loaderData $m]
+    set count [::blobulator::addTrajectoryFile $m $gro]
+    set all [loaderData $m]
+    list $count [molinfo $m get numatoms] [molinfo $m get numframes] [molinfo $m get frame] \
+        [expr {$before eq [lrange $all 0 1] && $before eq [lrange $all 2 3]}] \
+        [molinfo $other get numframes] [expr {[molinfo top get id] == $other}]
+} -cleanup {loaderCleanup} -result {2 48 4 1 1 5 1}
+test load-2.6 {GRO atom mismatch reports both counts and preserves the existing molecule} -setup {
+    set m [::blobulator::loadProteinFiles $pdb]
+    set before [loaderData $m]
+} -body {
+    set code [catch {::blobulator::addTrajectoryFile $m $badGro} message]
+    list $code [string match {*47 atoms*has 48*same order*} $message] \
+        [expr {$before eq [loaderData $m]}] $::blobulator::loadBusy
+} -cleanup {loaderCleanup} -result {1 1 1 0}
 test load-3.1 {loading is blocked during an export or another load} -body {
     set ::blobulator::videoBusy 1
     set first [catch {::blobulator::loadProteinFiles $pdb}]
@@ -170,12 +211,15 @@ test load-4.1 {standalone installation loads bundled demo from a different worki
     set alpha [atomselect $m {protein and name CA}]
     set residues [$alpha num]
     $alpha delete
+    set matrix [lindex [molinfo $m get scale_matrix] 0]
     list $loaded [molinfo $m get numatoms] [molinfo $m get numframes] $residues \
         $::blobulator::select $::blobulator::isFirstTimeBlobulating \
         [expr {$before eq [loaderData $existing]}] \
         [string match {*100 frames. Click Blobulate.*} $::blobulator::loadStatus] \
-        [file exists [file join $exportDir {VMD Tutorial} tutorial-files]]
-} -cleanup {restoreLoader} -result {1 26190 100 76 protein 0 1 1 0}
+        [file exists [file join $exportDir {VMD Tutorial} tutorial-files]] \
+        [molinfo $m get frame] [molinfo $m get "{selection 0}"] \
+        [expr {[lindex $matrix 0 0] > 0.02}]
+} -cleanup {restoreLoader} -result {1 26190 100 76 protein 0 1 1 0 0 protein 1}
 
 test load-4.2 {bundled demo supports blobulation, smoothing 0 and 3, and CSV export} -setup {
     useStandaloneDemo

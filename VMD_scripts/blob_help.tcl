@@ -40,9 +40,9 @@ proc ::blobulator::helpContent {topic} {
         gettingStarted {return [string trim {
 Start with a protein
 
-1. Click Load protein... and browse to a PDB or PSF structure. A PSF also needs a matching coordinate or trajectory file, such as a DCD. Click Load protein in that dialog.
+1. Click Load protein... and browse to a structure VMD can read, such as PDB, PSF, GRO or G96. A topology without coordinates, such as PSF, also needs a matching coordinate or trajectory file. Click Load protein in that dialog.
 
-2. Or click Load ubiquitin demo. The repository includes the ubiquitin structure and its 100-frame pulling trajectory in VMD_scripts/demo/ubiquitin. No separate tutorial download or internet connection is needed.
+2. Or click Load ubiquitin demo. Blobulator opens the 100-frame trajectory at frame 0 and fits the protein in the graphics window. The structure and trajectory are included in VMD_scripts/demo/ubiquitin.
 
 3. Check Mol ID and Selection. Loading sets them automatically. For a molecule already open in VMD, use its numeric ID from VMD Main. Selection accepts VMD atom-selection expressions, for example protein or chain A. Press Return after editing either field.
 
@@ -61,20 +61,20 @@ Type threshold values and press Return, or click Blobulate to apply both entries
 
 Color by Blob Type uses blue for hydrophobic h-blobs, orange for polar p-blobs and green for short s-blobs. Blob ID gives h-blobs different colors to distinguish their groups.
 
-Add trajectory... appends matching coordinates to the selected molecule. The atom count and atom order must match the structure. Existing frames stay loaded. Blob annotations are sequence-based and are carried into added frames.
+Add trajectory... appends matching coordinates to the selected molecule. The atom count and atom order must match the structure. A GRO file may contain one snapshot or several concatenated frames. XTC and TRR can also provide trajectory frames. Existing frames stay loaded, and new frames inherit the blob annotations.
 
-Clear representations removes the selected molecule's representations. Click Blobulate to rebuild the blobs before exporting. Applied trajectory smoothing is retained when blobs are rebuilt.
+Clear all representations for Mol ID removes every graphical representation on the selected molecule, including representations added in VMD. Other molecules and all trajectory frames stay loaded. Click Blobulate to rebuild the blobs with the last applied smoothing value.
 
 Loading a new protein creates another molecule. Mol ID chooses which molecule Blobulator works on. PDF and MP4 include the whole visible VMD scene; CSV contains the selected molecule's blob data.
         }]}
         smoothing {return [string trim {
 Smooth trajectory playback
 
-Enter a nonnegative whole number in Trajectory smoothing, then click Apply to all blobs or press Return in that field. This updates every surviving representation created by Blobulator for the selected molecule.
+Enter a nonnegative whole number in Trajectory smoothing, then click Apply to all blobs or press Return in that field. The field rejects invalid edits and explains the problem below it. Apply updates every surviving representation created by Blobulator for the selected molecule.
 
 0 turns smoothing off and displays each frame's original geometry.
 
-3 requests three neighboring frames on each side of the current frame: nominally a seven-frame averaging window. It is a useful comparison value, not a required setting. Try 1, 2, 5 or another nonnegative whole number. Larger values can hide fast motions. Near trajectory ends, VMD handles the available neighboring frames.
+3 uses up to three earlier frames, the current frame and three later frames. That is up to seven frames total. 5 uses up to eleven frames. Larger values can hide fast motions. Near trajectory ends, VMD handles the available neighboring frames.
 
 The arrows cover 0 through 100; you can type larger values up to 2147483647. Choose a value suitable for the number of frames you loaded. Smoothing a single-frame structure will not create motion.
 
@@ -100,7 +100,7 @@ Cancel stops after the current frame finishes rendering and discards the unfinis
         troubleshooting {return [string trim {
 If something does not work
 
-No protein / no coordinates: load a PDB, or a PSF together with matching coordinates. Check Mol ID and ensure Selection includes protein atoms. Nonstandard residues may have no blob assignment.
+No protein / no coordinates: load a structure with coordinates, such as PDB or GRO, or pair a topology such as PSF with a matching trajectory. If Add trajectory reports an atom-count mismatch, check that both files describe the same atoms in the same order. Check Mol ID and ensure Selection includes protein atoms. Nonstandard residues may have no blob assignment.
 
 Buttons are disabled: an operation is running. Read the status and wait. For movie export, Cancel remains available in its own window. A file picker, protein loader or movie-options dialog must be closed before returning to the main controls.
 

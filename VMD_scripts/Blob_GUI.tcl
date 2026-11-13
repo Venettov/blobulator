@@ -75,6 +75,7 @@ namespace eval ::blobulator {
 
 	# Reopening restores the applied value and discards any unsubmitted edit.
 	variable smoothingWindow $trajectorySmoothing
+	variable smoothingHint "Frames before and after the current frame. 0 turns smoothing off."
 	variable HInput $H
 	variable LminInput $Lmin
 	# Stable representation names, indexed by the numeric molecule ID.
@@ -152,18 +153,19 @@ proc ::blobulator::GUI {} {
 	# Trajectory smoothing applies to all representations created by Blobulator.
 	grid [label $::blobulator::blobs.smoothingLabel -text "Trajectory smoothing:"] -row 14 -column 0 -pady 2
 	grid [spinbox $::blobulator::blobs.smoothing -from 0 -to 100 -increment 1 \
-		-width $::blobulator::paraWidth -textvariable ::blobulator::smoothingWindow] -row 14 -column 1 -sticky w
+		-width $::blobulator::paraWidth -textvariable ::blobulator::smoothingWindow \
+		-validate key -validatecommand {::blobulator::validateSmoothingEdit %V %P}] -row 14 -column 1 -sticky w
 	grid [button $::blobulator::blobs.applySmoothing -text "Apply to all blobs" \
 		-command {::blobulator::queueGUIAction {Applying smoothing...} ::blobulator::applyTrajectorySmoothing}] -row 14 -column 2 -pady 2
 	grid [label $::blobulator::blobs.smoothingHelp \
-		-text "Frames on each side; 0 turns smoothing off."] -row 15 -column 0 -columnspan 3 -pady 2
+		-textvariable ::blobulator::smoothingHint] -row 15 -column 0 -columnspan 3 -pady 2
 	bind $::blobulator::blobs.smoothing <Return> {::blobulator::queueGUIAction {Applying smoothing...} ::blobulator::applyTrajectorySmoothing}
 
 	#Button grids
 	grid [button $::blobulator::blobs.blobulate -text "Blobulate" -width $::blobulator::buttonWidth -command {::blobulator::queueGUIAction {Blobulating...} ::blobulator::blobulateGUI}] -row 16 -column 0 -columnspan 3
 	grid [button $::blobulator::blobs.hdefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::queueGUIAction {Updating threshold...} ::blobulator::hDefault}] -padx 0 -pady 1 -row 9 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
 	grid [button $::blobulator::blobs.ldefault -text "Default" -width $::blobulator::defaultButtonWidth -command {::blobulator::queueGUIAction {Updating length...} ::blobulator::lminDefault}] -padx 0 -pady 1 -row 11 -columnspan 1 -column $::blobulator::defaultButtonColumn -sticky w
-	grid [button $::blobulator::blobs.clear -text "Clear representations" -width $::blobulator::buttonWidth -command {::blobulator::queueGUIAction {Clearing representations...} {::blobulator::blobClear $::blobulator::MolID}}] -row 17 -column 0 -columnspan 3
+	grid [button $::blobulator::blobs.clear -text "Clear all representations for Mol ID" -width $::blobulator::buttonWidth -command {::blobulator::queueGUIAction {Clearing representations...} {::blobulator::blobClear $::blobulator::MolID}}] -row 17 -column 0 -columnspan 3
 	frame $::blobulator::blobs.exports
 	pack [button $::blobulator::blobs.exports.pdf -text "Export image (PDF)" \
 		-command {::blobulator::queueGUIAction {Exporting PDF...} {::blobulator::exportFromGUI pdf}}] -side left -padx 6 -pady 6
@@ -205,9 +207,7 @@ proc ::blobulator::GUI {} {
 proc ::blobulator::smoothBlobRepresentations {molid window} {
     variable blobRepNames
 
-    if {![string is integer -strict $window] || $window < 0 || $window > 2147483647} {
-        return -code error "Smoothing must be a whole number from 0 to 2147483647."
-    }
+    set window [validatedSmoothingWindow $window]
     set molid [molinfo $molid get id]
     set count 0
     if {[info exists blobRepNames($molid)]} {
@@ -236,12 +236,17 @@ proc ::blobulator::applyTrajectorySmoothing {} {
     variable trajectorySmoothing
     variable blobs
 
-    if {[catch {::blobulator::smoothBlobRepresentations $MolID $smoothingWindow} message]} {
+    if {[catch {
+        set window [validatedSmoothingWindow $smoothingWindow]
+        smoothBlobRepresentations $MolID $window
+    } message]} {
         tk_messageBox -parent $blobs -icon error -type ok \
             -title "Trajectory smoothing" -message $message
         return 0
     }
-    set trajectorySmoothing $smoothingWindow
+    set trajectorySmoothing $window
+    set smoothingWindow $window
+    variable smoothingHint "Frames before and after the current frame. 0 turns smoothing off."
     return 1
 }
 
@@ -672,7 +677,7 @@ return
 }
 
 #
-#	Program removes all graphical representations
+#	Program removes all graphical representations from the selected molecule.
 # 
 #	Arguments:
 #	MolID (Integer): An integer that assigns what protein the algorithm looks for 
@@ -682,11 +687,14 @@ return
 proc ::blobulator::blobClear {MolID} {
 	set molid [molinfo $MolID get id]
 	set ::blobulator::isFirstTimeBlobulating 0
-	set range [molinfo $molid get numreps]
+	::blobulator::withDisplayUpdatesPaused {
+		set range [molinfo $molid get numreps]
 		for {set i 0} {$i < $range} {incr i} {
 			mol delrep 0 $molid
-		} 
+		}
+	}
 	unset -nocomplain ::blobulator::blobRepNames($molid)
+	set ::blobulator::loadStatus "Cleared all representations for molecule $molid. Click Blobulate to rebuild the blobs."
 return 
 	}
 	
